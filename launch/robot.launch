@@ -1,0 +1,5 @@
+<launch>
+  <!-- <node name="main" pkg="red-light-green-light-robot" type="example.py" output="screen"/> -->
+  <node name="driver" pkg="red-light-green-light-robot" type="driver.py" output="screen"/>
+  <node name="vision" pkg="red-light-green-light-robot" type="vision.py" output="screen"/>
+</launch>
