@@ -81,3 +81,32 @@ class Driver():
     #         self._cmd_pub.publish(twist_msg)
     #
     #         rate.sleep()
+
+def main():
+    # "Global" variables
+    frequency = 10
+    default_cmd_vel_topic = "cmd_vel"
+    default_scan_topic = "base_scan"
+    linear_velocity = 0.2 # m/s
+    angular_velocity = 10 * math.pi/180 # rad/s
+
+    rospy.init_node("driver")
+    rospy.sleep(2)
+
+    driver = Driver(frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity)
+
+    rospy.sleep(2)
+
+    driver.translate(0.2)
+
+    # robot.translate(1)
+    # robot.rotate_rel(-30)
+    # robot.rotate_abs(0)
+    # for i in range(4):
+    #     robot.translate(1)
+    #     robot.rotate_rel(90)
+
+    # rospy.spin()
+
+if __name__ == "__main__":
+    main()
