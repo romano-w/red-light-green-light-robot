@@ -5,6 +5,8 @@
 # Date: Fall 21, 11/15/2021
 # Sources:
 
+from driving import Driver
+
 from enum import Enum
 import rospy
 import math
@@ -24,47 +26,8 @@ class fsm(Enum):
 
 
 class Robot():
-    def __init__(self, frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity):
-        self.frequency = frequency
-        self._cmd_pub = rospy.Publisher(default_cmd_vel_topic, Twist, queue_size=1)
-        self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
-        self._laser_sub = rospy.Subscriber(default_scan_topic, LaserScan, self._laser_callback, queue_size=1)
-
-        self.linear_velocity = linear_velocity
-        self.angular_velocity = angular_velocity
-
-        self.odom = np.zeros(3)
-
-    def _laser_callback(self, msg):
-        """Processes laser message."""
+    def __init__(self):
         pass
-
-    def _odom_callback(self, msg):
-        """Callback to process odom."""
-        print("RAN")
-        self.odom[0] = msg.pose.pose.position.x
-        self.odom[1] = msg.pose.pose.position.y
-
-        orient_q = msg.pose.pose.orientation
-        eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
-        self.odom[2] = euler_from_quaternion(eulers)[2]
-
-    def stop(self):
-        """Stops the robot."""
-        twist_msg = Twist()
-        self._cmd_pub.publish(twist_msg)
-
-    def translate(self, d):
-        """Moves the robot forward by the value d."""
-        rate = rospy.Rate(self.frequency)
-        start_time = rospy.get_rostime()
-        duration = rospy.Duration(d / self.linear_velocity)
-        while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
-            twist_msg = Twist()
-            twist_msg.linear.x = np.sign(d) * self.linear_velocity
-            self._cmd_pub.publish(twist_msg)
-
-            rate.sleep()
 
     def spin(self):
         rate = rospy.Rate(self._frequency)
@@ -79,14 +42,17 @@ def main():
     linear_velocity = 0.2 # m/s
     angular_velocity = 10 * math.pi/180 # rad/s
 
-    rospy.init_node("robot")
+    rospy.init_node("main")
     rospy.sleep(2)
 
-    robot = Robot(frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity)
+    rospy.init_node("driver")
+    rospy.sleep(2)
+
+    driver = Driver(frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity)
 
     rospy.sleep(2)
 
-    robot.translate(0.2)
+    driver.translate(0.2)
 
     # robot.translate(1)
     # robot.rotate_rel(-30)
@@ -95,7 +61,7 @@ def main():
     #     robot.translate(1)
     #     robot.rotate_rel(90)
 
-    rospy.spin()
+    # rospy.spin()
 
 if __name__ == "__main__":
     main()
