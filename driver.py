@@ -34,14 +34,19 @@ class fsm(Enum):
 class Driver():
     def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
         self.frequency = frequency
+        
+        # Set up subscribers and publishers
         self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
         self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
 
+        # Parameters.
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
 
         self.odom = np.zeros(3)
+
+        self.loops = 0
 
     def _laser_callback(self, msg):
         """Processes laser message."""
@@ -98,6 +103,15 @@ class Driver():
     #         rate.sleep()
 
     def spin(self):
+        rate = rospy.Rate(self.frequency)
+        while self.loops > 0:
+            
+            if self.fsm = fsm.MOVE:
+                continue
+            if self.fsm = fsm.AVOID:
+                continue
+            if self.fsm = fsm.LOST:
+                continue
         pass
 
 def main():
