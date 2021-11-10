@@ -81,6 +81,9 @@ class Driver():
     #
     #         rate.sleep()
 
+    def spin(self):
+        pass
+
 def main():
     # "Global" variables
     frequency = 10
@@ -96,7 +99,7 @@ def main():
 
     rospy.sleep(2)
 
-    driver.translate(0.2)
+    # driver.translate(0.2)
 
     # robot.translate(1)
     # robot.rotate_rel(-30)
@@ -105,7 +108,10 @@ def main():
     #     robot.translate(1)
     #     robot.rotate_rel(90)
 
-    # rospy.spin()
+    # try:
+    #     driver.spin()
+    # except rospy.ROSInterruptException:
+    #     rospy.logerr("ROS node interruped")
 
 if __name__ == "__main__":
     main()
