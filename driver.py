@@ -8,6 +8,7 @@
 import rospy
 import math
 import numpy as np
+from enum import Enum
 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -24,6 +25,11 @@ FREQUENCY = 30 #Hz.
 # Velocities that will be used (feel free to tune)
 LINEAR_VELOCITY = .2 # m/s
 ANGULAR_VELOCITY = math.pi/6 # rad/s
+
+class fsm(Enum):
+    MOVE = 1
+    LOST = 2
+    AVOID = 3
 
 class Driver():
     def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
