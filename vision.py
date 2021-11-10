@@ -19,7 +19,7 @@ class Vision():
     def __init__(self):
         self.image_pub = rospy.Publisher("image_topic_2", Image, queue_size=1)
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("image_topic", Image, self._img_callback, queue_size=1)
+        self.image_sub = rospy.Subscriber("camera/rgb/image_rect_color", Image, self._img_callback, queue_size=1)
 
     def _img_callback(self, data):
         try:
@@ -27,12 +27,15 @@ class Vision():
         except CvBridgeError as e:
             print(e)
 
-        (rows,cols,channels) = cv_image.shape
+        (rows, cols, channels) = cv_image.shape
         if cols > 60 and rows > 60 :
             cv2.circle(cv_image, (50,50), 10, 255)
 
+        cv2.startWindowThread()
+        cv2.namedWindow("Image window")
+
         cv2.imshow("Image window", cv_image)
-        cv2.waitKey(3)
+        cv2.waitKey(2)
 
         try:
             self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))

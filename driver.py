@@ -26,7 +26,7 @@ LINEAR_VELOCITY = .2 # m/s
 ANGULAR_VELOCITY = math.pi/6 # rad/s
 
 class Driver():
-    def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
+    def __init__(self, frequency=FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
         self.frequency = frequency
         self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
@@ -105,7 +105,7 @@ def main():
     rospy.init_node("driver")
     rospy.sleep(2)
 
-    driver = Driver(frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity)
+    driver = Driver()
 
     rospy.sleep(2)
 
