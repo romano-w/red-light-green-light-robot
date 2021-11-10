@@ -33,7 +33,6 @@ class fsm(Enum):
 
 class Driver():
     def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
-        self.frequency = frequency
         
         # Set up subscribers and publishers
         self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -43,11 +42,11 @@ class Driver():
         # Parameters.
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
+        self.frequency = frequency
+        self.loops = 0
         self.fsm = fsm.MOVE
 
         self.odom = np.zeros(3)
-
-        self.loops = 0
 
     def _laser_callback(self, msg):
         """Processes laser message."""
