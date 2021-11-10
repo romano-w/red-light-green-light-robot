@@ -26,13 +26,16 @@ FREQUENCY = 30 #Hz.
 LINEAR_VELOCITY = .2 # m/s
 ANGULAR_VELOCITY = math.pi/6 # rad/s
 
+# Threshold of minimum clearance distance (feel free to tune)
+MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, should be smaller than range_max
+
 class fsm(Enum):
     MOVE = 1
     LOST = 2
     AVOID = 3
 
 class Driver():
-    def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
+    def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE):
         
         # Set up subscribers and publishers
         self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -43,14 +46,32 @@ class Driver():
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
         self.frequency = frequency
+        self.min_threshold_distance = min_threshold_distance
         self.loops = 0
         self.fsm = fsm.MOVE
 
         self.odom = np.zeros(3)
 
+        # Flag used to control the behavior of the robot.
+        self._close_obstacle = False # Flag variable that is true if there is a close obstacle.
+
     def _laser_callback(self, msg):
         """Processes laser message."""
-        pass
+        
+        for i in range(len(msg.ranges)/2):
+            if msg.ranges[i] < distance_from_wall:
+                distance_from_wall = msg.ranges[i]
+        # self._distance_from_wall = distance_from_wall
+        regions_ = {
+        'right':  min(min(msg.ranges[0:250]), 10),
+        'front':  min(min(msg.ranges[251:500]), 10),
+        'left':   min(min(msg.ranges[501:713]), 10),
+        }
+        self._distance_from_wall = regions_['right']
+        if not self._close_obstacle:
+            if regions_['front'] < self.min_threshold_distance:
+                self._close_obstacle = True
+    
 
     def _odom_callback(self, msg):
         """Callback to process odom."""
@@ -125,7 +146,7 @@ def main():
     rospy.init_node("driver")
     rospy.sleep(2)
 
-    driver = Driver(frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity)
+    driver = Driver()
 
     rospy.sleep(2)
 
