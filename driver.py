@@ -43,6 +43,7 @@ class Driver():
         # Parameters.
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
+        self.fsm = fsm.MOVE
 
         self.odom = np.zeros(3)
 
@@ -106,11 +107,11 @@ class Driver():
         rate = rospy.Rate(self.frequency)
         while self.loops > 0:
             
-            if self.fsm = fsm.MOVE:
+            if self.fsm == fsm.MOVE:
                 continue
-            if self.fsm = fsm.AVOID:
+            if self.fsm == fsm.AVOID:
                 continue
-            if self.fsm = fsm.LOST:
+            if self.fsm == fsm.LOST:
                 continue
         pass
 
