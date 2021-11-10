@@ -14,13 +14,23 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
+# Topic names
+DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
+DEFAULT_SCAN_TOPIC = 'base_scan' # on the robot it is called 'scan'
+
+# Frequency at which the loop operates
+FREQUENCY = 30 #Hz.
+
+# Velocities that will be used (feel free to tune)
+LINEAR_VELOCITY = .2 # m/s
+ANGULAR_VELOCITY = math.pi/6 # rad/s
 
 class Driver():
-    def __init__(self, frequency, default_cmd_vel_topic, default_scan_topic, linear_velocity, angular_velocity):
+    def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
         self.frequency = frequency
-        self._cmd_pub = rospy.Publisher(default_cmd_vel_topic, Twist, queue_size=1)
+        self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
-        self._laser_sub = rospy.Subscriber(default_scan_topic, LaserScan, self._laser_callback, queue_size=1)
+        self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
 
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
