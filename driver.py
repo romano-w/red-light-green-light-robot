@@ -120,91 +120,77 @@ class Driver():
         twist_msg.linear.x = linear_vel
         twist_msg.angular.z = angular_vel
         self._cmd_pub.publish(twist_msg)
+ 
+    def translate(self, d):
+        """Moves the robot forward by the value d."""
+        rate = rospy.Rate(self.frequency)
+        start_time = rospy.get_rostime()
+        duration = rospy.Duration(d / self.linear_velocity)
+        while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
+            twist_msg = Twist()
+            twist_msg.linear.x = np.sign(d) * self.linear_velocity
+            self._cmd_pub.publish(twist_msg)
 
-	def translate(self, d):
-		"""Moves the robot forward by the value d."""
-		rate = rospy.Rate(self.frequency)
-		start_time = rospy.get_rostime()
-		duration = rospy.Duration(d / self.linear_velocity)
-		while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
-			twist_msg = Twist()
-			twist_msg.linear.x = np.sign(d) * self.linear_velocity
-			self._cmd_pub.publish(twist_msg)
+            rate.sleep()
 
-			rate.sleep()
+    def rotate_rel(self, a):
+        """Rotates the robot a degrees from the current angle."""
+        a = a * (math.pi / 180)
+        rate = rospy.Rate(self.frequency)
+        start_time = rospy.get_rostime()
+        duration = rospy.Duration(abs(a) / self.linear_velocity)
+        while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
+            twist_msg = Twist()
+            twist_msg.angular.z = np.sign(a) * self.angular_velocity
+            self._cmd_pub.publish(twist_msg)
 
-	def rotate_rel(self, a):
-		"""Rotates the robot a degrees from the current angle."""
-		a = a * (math.pi / 180)
-		rate = rospy.Rate(self.frequency)
-		start_time = rospy.get_rostime()
-		duration = rospy.Duration(abs(a) / self.linear_velocity)
-		while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
-			twist_msg = Twist()
-			twist_msg.angular.z = np.sign(a) * self.angular_velocity
-			self._cmd_pub.publish(twist_msg)
+            rate.sleep()
+    
+    def spin(self):
+      rate = rospy.Rate(self.frequency)
+      while self.loops > 0:
 
-			rate.sleep()
+        if self.fsm == fsm.MOVE:
+          currError = 0
+          currError = self.goal_following_distance - self.distance_from_goal
+          self.update_control(currError)
+          # below this we will need to figure out how to control 
+          # message can be translated into linear and angular 
+          # velocities. Maybe two separate controls/PIDs ?
+          linear_vel = LINEAR_VELOCITY
+          angular_vel = self._control
+          self.move(linear_vel, angular_vel)
+        if self.fsm == fsm.AVOID:
+          continue
+        if self.fsm == fsm.LOST:
+          continue
 
-	# def rotate_abs(self, target):
-	#     """Rotates the robate to the target angle wrt odom."""
-	#     rate = rospy.Rate(self.frequency)
-	#     sign = 1 if self.odom[2] - target < 180 else -1
-	#     while not rospy.is_shutdown() and abs(target - self.odom[2]) > 0.05:
-	#         twist_msg = Twist()
-	#         twist_msg.angular.z = sign * self.angular_velocity
-	#         self._cmd_pub.publish(twist_msg)
-	#
-	#         rate.sleep()
+    def lost_mode(self):
+        self.move(0, self.angular_velocity)
 
-	def spin(self):
-		rate = rospy.Rate(self.frequency)
-		while self.loops > 0:
-			
-			if self.fsm == fsm.MOVE:
-				currError = 0
-				currError = self.goal_following_distance - self.distance_from_goal
-				self.update_control(currError)
-				# below this we will need to figure out how to control 
-				# message can be translated into linear and angular 
-				# velocities. Maybe two separate controls/PIDs ?
-				linear_vel = LINEAR_VELOCITY
-				angular_vel = self._control
-				self.move(linear_vel, angular_vel)
-			if self.fsm == fsm.AVOID:
-				continue
-			if self.fsm == fsm.LOST:
-				continue
-		pass
+    # def rotate_abs(self, target):
+    #     """Rotates the robate to the target angle wrt odom."""
+    #     rate = rospy.Rate(self.frequency)
+    #     sign = 1 if self.odom[2] - target < 180 else -1
+    #     while not rospy.is_shutdown() and abs(target - self.odom[2]) > 0.05:
+    #         twist_msg = Twist()
+    #         twist_msg.angular.z = sign * self.angular_velocity
+    #         self._cmd_pub.publish(twist_msg)
+    #
+    #         rate.sleep()
 
 def main():
-	# "Global" variables
-	frequency = 10
-	default_cmd_vel_topic = "cmd_vel"
-	default_scan_topic = "base_scan"
-	linear_velocity = 0.2 # m/s
-	angular_velocity = 10 * math.pi/180 # rad/s
-
-	rospy.init_node("driver")
-	rospy.sleep(2)
-
+  rospy.init_node("driver")
+  rospy.sleep(2)
 	driver = Driver()
 
 	rospy.sleep(2)
 
-	# driver.translate(0.2)
-
-	# robot.translate(1)
-	# robot.rotate_rel(-30)
-	# robot.rotate_abs(0)
-	# for i in range(4):
-	#     robot.translate(1)
-	#     robot.rotate_rel(90)
-
-	# try:
-	#     driver.spin()
-	# except rospy.ROSInterruptException:
-	#     rospy.logerr("ROS node interruped")
+    # driver.translate(0.2)
+    # try:
+    #     driver.spin()
+    # except rospy.ROSInterruptException:
+    #     rospy.logerr("ROS node interruped")
 
 if __name__ == "__main__":
 	main()
