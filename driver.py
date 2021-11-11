@@ -26,8 +26,9 @@ FREQUENCY = 30 #Hz.
 LINEAR_VELOCITY = .2 # m/s
 ANGULAR_VELOCITY = math.pi/6 # rad/s
 
-# Threshold of minimum clearance distance (feel free to tune)
-MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, should be smaller than range_max
+# Threshold distances 
+MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
+GOAL_FOLLOWING_DISTANCE = 1.5 # m, distance to maintain from target
 
 class fsm(Enum):
     MOVE = 1
@@ -56,6 +57,23 @@ class Driver():
         # Flag used to control the behavior of the robot.
         self._close_obstacle = False # Flag variable that is true if there is a close obstacle.
 
+        # PID gain values
+        self._kp = 1
+        self._kd = 100
+        self._k = 1
+
+        self._control = 0.0 # current control message
+        self._error = 0.0 # current error
+        self._prev_error = 0.0 # previous error
+        self._dt = 1 / float(FREQUENCY)
+
+        # Other PID values
+        self._control = 0.0 # current control message
+        self._error = 0.0 # current error
+        self._prev_error = 0.0 # previous error
+        self._dt = 1 / float(FREQUENCY)
+        self.goal_following_distance = 
+
     def _laser_callback(self, msg):
         """Processes laser message."""
         
@@ -82,6 +100,12 @@ class Driver():
         orient_q = msg.pose.pose.orientation
         eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
         self.odom[2] = euler_from_quaternion(eulers)[2]
+
+    def update_control(self, err):
+        self._prev_error = self._error
+        self._error = err
+        d_term =  float((self._error - self._prev_error) / float(self._dt)) 
+        self._control = self._kp * self._error + self._kd * d_term
 
     def stop(self):
         """Stops the robot."""
