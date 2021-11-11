@@ -88,6 +88,15 @@ class Driver():
         twist_msg = Twist()
         self._cmd_pub.publish(twist_msg)
 
+    def move(self, linear_vel, angular_vel):
+    		"""Send a velocity command (linear vel in m/s, angular vel in rad/s)."""
+		# Setting velocities.
+		twist_msg = Twist()
+
+		twist_msg.linear.x = linear_vel
+		twist_msg.angular.z = angular_vel
+		self._cmd_pub.publish(twist_msg)
+
     def translate(self, d):
         """Moves the robot forward by the value d."""
         rate = rospy.Rate(self.frequency)
@@ -113,6 +122,9 @@ class Driver():
 
             rate.sleep()
 
+    def lost_mode(self):
+        self.move(0, self.angular_velocity)
+
     # def rotate_abs(self, target):
     #     """Rotates the robate to the target angle wrt odom."""
     #     rate = rospy.Rate(self.frequency)
@@ -133,17 +145,13 @@ class Driver():
             if self.fsm == fsm.AVOID:
                 continue
             if self.fsm == fsm.LOST:
-                continue
+                print("robot is lost")
+                self.lost_mode()
+
+            rate.sleep()
         pass
 
 def main():
-    # "Global" variables
-    frequency = 10
-    default_cmd_vel_topic = "cmd_vel"
-    default_scan_topic = "base_scan"
-    linear_velocity = 0.2 # m/s
-    angular_velocity = 10 * math.pi/180 # rad/s
-
     rospy.init_node("driver")
     rospy.sleep(2)
 
@@ -152,14 +160,6 @@ def main():
     rospy.sleep(2)
 
     # driver.translate(0.2)
-
-    # robot.translate(1)
-    # robot.rotate_rel(-30)
-    # robot.rotate_abs(0)
-    # for i in range(4):
-    #     robot.translate(1)
-    #     robot.rotate_rel(90)
-
     # try:
     #     driver.spin()
     # except rospy.ROSInterruptException:
