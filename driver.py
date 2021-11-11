@@ -36,7 +36,7 @@ class fsm(Enum):
     AVOID = 3
 
 class Driver():
-    def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE):
+    def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
         
         # Set up subscribers and publishers
@@ -49,6 +49,7 @@ class Driver():
         self.angular_velocity = angular_velocity
         self.frequency = frequency
         self.min_threshold_distance = min_threshold_distance
+        self.goal_following_distance = goal_following_distance
         self.loops = 0
         self.fsm = fsm.MOVE
 
@@ -72,7 +73,6 @@ class Driver():
         self._error = 0.0 # current error
         self._prev_error = 0.0 # previous error
         self._dt = 1 / float(FREQUENCY)
-        self.goal_following_distance = 
 
     def _laser_callback(self, msg):
         """Processes laser message."""
