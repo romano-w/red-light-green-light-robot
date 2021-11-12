@@ -27,12 +27,16 @@ class Vision():
         except CvBridgeError as e:
             print(e)
 
-        (rows,cols,channels) = cv_image.shape
-        if cols > 60 and rows > 60 :
-            cv2.circle(cv_image, (50,50), 10, 255)
-
-        cv2.imshow("Image window", cv_image)
-        cv2.waitKey(3)
+        # Load the cascade
+        face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+        # Convert into grayscale
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        # Detect faces
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        if len(faces) > 0:
+            ### CHANGE STATE HERE ###
+            pass
 
         try:
             self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
