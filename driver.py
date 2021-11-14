@@ -144,11 +144,16 @@ class Driver():
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
 			if self.fsm == fsm.AVOID:
-    			# Turn until the obstacle is out of the way
+				# Turn until the obstacle is out of the way
 				if self._close_obstacle is True:
 					self.move(0, -self.angular_velocity)
 					self._close_obstacle = False
-
+				# Then start traversing the obstacle 
+				# We will get a signal from the vision.py once the person
+				# is back in sight of the camera
+				else:
+					# do something here
+					pass
 			
 			if self.fsm == fsm.LOST:
 				continue
