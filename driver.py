@@ -50,7 +50,8 @@ class Driver():
 		self.frequency = frequency
 		self.min_threshold_distance = min_threshold_distance
 		self.goal_following_distance = goal_following_distance
-		self.distance_from_goal = 0
+		self.distance_from_goal = 0.0
+		self.target_off_center = 0.0
 		self.loops = 0
 		self.fsm = fsm.MOVE
 
@@ -59,17 +60,19 @@ class Driver():
 		# Flag used to control the behavior of the robot.
 		self._close_obstacle = False # Flag variable that is true if there is a close obstacle.
 
-		# PID gain values
+		# PD gain values
 		self._kp = 1
 		self._kd = 100
 		self._k = 1
 
-		self._control = 0.0 # current control message
-		self._error = 0.0 # current error
+		self._linear_control = 0.0 # current control message for linear velocity
+		self._angular_control = 0.0 # current control message for angular velocity
+		self._linear_error = 0.0 # current linear error
+		self._angular_error = 0.0 # current angular error
 		self._prev_error = 0.0 # previous error
 		self._dt = 1 / float(FREQUENCY)
 
-		# Other PID values
+		# Other PD values
 		self._control = 0.0 # current control message
 		self._error = 0.0 # current error
 		self._prev_error = 0.0 # previous error
@@ -91,6 +94,7 @@ class Driver():
 		if not self._close_obstacle:
 			if regions_['front'] < self.min_threshold_distance:
 				self._close_obstacle = True
+				self.fsm = fsm.AVOID
 
 	def _odom_callback(self, msg):
 		"""Callback to process odom."""
@@ -101,11 +105,18 @@ class Driver():
 		eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
-	def update_control(self, err):
-		self._prev_error = self._error
-		self._error = err
+	def update_linear(self, err):
+		self._prev_error = self._linear_error
+		self._linear_error = err
 		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
-		self._control = self._kp * self._error + self._kd * d_term
+		self._linear_control = self._kp * self._error + self._kd * d_term
+	
+	def update_angular(self, err):
+		# takes in a percentage from center
+		self._prev_error = self._angular_error
+		self._angular_error = err
+		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
+		self._angular_control = self._kp * self._error + self._kd * d_term
 
 	def stop(self):
 		"""Stops the robot."""
@@ -120,63 +131,29 @@ class Driver():
 		twist_msg.linear.x = linear_vel
 		twist_msg.angular.z = angular_vel
 		self._cmd_pub.publish(twist_msg)
- 
-	def translate(self, d):
-		"""Moves the robot forward by the value d."""
-		rate = rospy.Rate(self.frequency)
-		start_time = rospy.get_rostime()
-		duration = rospy.Duration(d / self.linear_velocity)
-		while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
-			twist_msg = Twist()
-			twist_msg.linear.x = np.sign(d) * self.linear_velocity
-			self._cmd_pub.publish(twist_msg)
-
-			rate.sleep()
-
-	def rotate_rel(self, a):
-		"""Rotates the robot a degrees from the current angle."""
-		a = a * (math.pi / 180)
-		rate = rospy.Rate(self.frequency)
-		start_time = rospy.get_rostime()
-		duration = rospy.Duration(abs(a) / self.linear_velocity)
-		while not rospy.is_shutdown() and rospy.get_rostime() - start_time < duration:
-			twist_msg = Twist()
-			twist_msg.angular.z = np.sign(a) * self.angular_velocity
-			self._cmd_pub.publish(twist_msg)
-
-			rate.sleep()
 	
 	def spin(self):
 		rate = rospy.Rate(self.frequency)
 		while self.loops > 0:
 			if self.fsm == fsm.MOVE:
-				currError = 0
-				currError = self.goal_following_distance - self.distance_from_goal
-				self.update_control(currError)
-				# below this we will need to figure out how to control 
-				# message can be translated into linear and angular 
-				# velocities. Maybe two separate controls/PIDs ?
-				linear_vel = LINEAR_VELOCITY
-				angular_vel = self._control
+				linear_error = self.goal_following_distance - self.distance_from_goal
+				self.update_linear(linear_error)
+				angular_error = self.target_off_center
+				self.update_angular(linear_error)
+				linear_vel = self._linear_control
+				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
 			if self.fsm == fsm.AVOID:
 				continue
 			if self.fsm == fsm.LOST:
 				continue
+			rate.sleep()
 
 	def lost_mode(self):
 		self.move(0, self.angular_velocity)
 
-	# def rotate_abs(self, target):
-	#     """Rotates the robate to the target angle wrt odom."""
-	#     rate = rospy.Rate(self.frequency)
-	#     sign = 1 if self.odom[2] - target < 180 else -1
-	#     while not rospy.is_shutdown() and abs(target - self.odom[2]) > 0.05:
-	#         twist_msg = Twist()
-	#         twist_msg.angular.z = sign * self.angular_velocity
-	#         self._cmd_pub.publish(twist_msg)
-	#
-	#         rate.sleep()
+	def avoid_obstacle(self):
+		pass
 
 def main():
 	rospy.init_node("driver")
