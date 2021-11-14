@@ -64,7 +64,8 @@ class Driver():
 		self._kd = 100
 		self._k = 1
 
-		self._control = 0.0 # current control message
+		self._linear_control = 0.0 # current control message for linear velocity
+		self._angular_control = 0.0 # current control message for angular velocity
 		self._error = 0.0 # current error
 		self._prev_error = 0.0 # previous error
 		self._dt = 1 / float(FREQUENCY)
@@ -101,11 +102,17 @@ class Driver():
 		eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
-	def update_control(self, err):
+	def update_linear(self, err):
 		self._prev_error = self._error
 		self._error = err
 		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
-		self._control = self._kp * self._error + self._kd * d_term
+		self._linear_control = self._kp * self._error + self._kd * d_term
+	
+	def update_angular(self, err):
+		self._prev_error = self._error
+		self._error = err
+		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
+		self._angular_control = self._kp * self._error + self._kd * d_term
 
 	def stop(self):
 		"""Stops the robot."""
@@ -152,7 +159,7 @@ class Driver():
 			if self.fsm == fsm.MOVE:
 				currError = 0
 				currError = self.goal_following_distance - self.distance_from_goal
-				self.update_control(currError)
+				self.update_linear(currError)
 				# below this we will need to figure out how to control 
 				# message can be translated into linear and angular 
 				# velocities. Maybe two separate controls/PIDs ?
