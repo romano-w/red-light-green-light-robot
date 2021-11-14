@@ -141,13 +141,19 @@ class Vision():
         return (dist_from_center / img_center) * 100
 
 
+    def main_loop(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            rate.sleep()
+
+
+
 def main():
     vision = Vision()
     rospy.init_node("vision_node", anonymous=True)
 
     try:
-        # vision.spin()
-        rospy.spin()
+        vision.main_loop()
     except rospy.ROSInterruptException:
         rospy.logerr("ROS node interruped")
 
