@@ -63,7 +63,6 @@ class Driver():
 		# PD gain values
 		self._kp = 1
 		self._kd = 100
-		self._k = 1
 
 		self._linear_control = 0.0 # current control message for linear velocity
 		self._angular_control = 0.0 # current control message for angular velocity
@@ -112,7 +111,7 @@ class Driver():
 		self._linear_control = self._kp * self._error + self._kd * d_term
 	
 	def update_angular(self, err):
-		# takes in a percentage from center
+		# takes in a percentage from center (will also be positive or negative)
 		self._prev_error = self._angular_error
 		self._angular_error = err
 		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
@@ -139,7 +138,7 @@ class Driver():
 				linear_error = self.goal_following_distance - self.distance_from_goal
 				self.update_linear(linear_error)
 				angular_error = self.target_off_center
-				self.update_angular(linear_error)
+				self.update_angular(angular_error)
 				linear_vel = self._linear_control
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
