@@ -13,6 +13,7 @@ from enum import Enum
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 # Topic names
@@ -34,11 +35,21 @@ class fsm(Enum):
 	MOVE = 1
 	LOST = 2
 	AVOID = 3
+	FACE = 4
 
 class Driver():
 	def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
-		
+		# TODO:
+		# Node for publishing everything:
+			# pct_from_center: float
+			# distance_to_object: float
+			# face_detected: bool -> string = "True" "False"
+			# lost: bool -> string = "True" "False"
+			# string format: pct_from_center,distance_to_object,face_detected,lost
+
+		self._vision_sub = rospy.Subscriber("vision_node", String, self._vision_callback)
+
 		# Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
 		self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
@@ -59,6 +70,7 @@ class Driver():
 
 		# Flag used to control the behavior of the robot.
 		self._close_obstacle = False # Flag variable that is true if there is a close obstacle.
+		self.face_detected = False # Flag for if the robot should stop for face
 
 		# PD gain values
 		self._kp = 1
@@ -104,6 +116,17 @@ class Driver():
 		eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
+	def _vision_callback(self, msg):
+		data = msg.data.split(",")
+		self.target_off_center = data[0]
+		self.distance_from_goal = data[1]
+		if data[2] == "True":
+			self.fsm = fsm.FACE
+		elif data[3] == "True":
+			self.fsm = fsm.LOST
+		elif self.fsm != fsm.AVOID:
+			self.fsm = fsm.MOVE
+
 	def update_linear(self, err):
 		self._prev_error = self._linear_error
 		self._linear_error = err
@@ -144,6 +167,8 @@ class Driver():
 				self.move(linear_vel, angular_vel)
 			if self.fsm == fsm.AVOID:
 				continue
+			if self.fsm == fsm.FACE:
+				self.move(0,0)
 			if self.fsm == fsm.LOST:
 				continue
 			rate.sleep()
