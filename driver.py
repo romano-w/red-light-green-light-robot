@@ -59,18 +59,19 @@ class Driver():
 		# Flag used to control the behavior of the robot.
 		self._close_obstacle = False # Flag variable that is true if there is a close obstacle.
 
-		# PID gain values
+		# PD gain values
 		self._kp = 1
 		self._kd = 100
 		self._k = 1
 
 		self._linear_control = 0.0 # current control message for linear velocity
 		self._angular_control = 0.0 # current control message for angular velocity
-		self._error = 0.0 # current error
+		self._linear_error = 0.0 # current linear error
+		self._angular_error = 0.0 # current angular error
 		self._prev_error = 0.0 # previous error
 		self._dt = 1 / float(FREQUENCY)
 
-		# Other PID values
+		# Other PD values
 		self._control = 0.0 # current control message
 		self._error = 0.0 # current error
 		self._prev_error = 0.0 # previous error
@@ -103,14 +104,15 @@ class Driver():
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
 	def update_linear(self, err):
-		self._prev_error = self._error
-		self._error = err
+		self._prev_error = self._linear_error
+		self._linear_error = err
 		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
 		self._linear_control = self._kp * self._error + self._kd * d_term
 	
 	def update_angular(self, err):
-		self._prev_error = self._error
-		self._error = err
+		# takes in a percentage from center
+		self._prev_error = self._angular_error
+		self._angular_error = err
 		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
 		self._angular_control = self._kp * self._error + self._kd * d_term
 
