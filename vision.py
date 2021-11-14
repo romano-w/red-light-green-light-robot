@@ -32,12 +32,12 @@ class Vision():
         dir_name = "vizfiles"
 
         self.state = fsm.LOST   # robot is initially lost
-        self.face_cascade = cv2.CascadeClassifier('{dir_name}/haarcascade_frontalface_default.xml')    # load face cascade
+        self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_default.xml')    # load face cascade
         
         # code for loading yolo
-        labelsPath = "{dir_name}/coco.names"
-        weightsPath = "{dir_name}/yolov3-tiny.weights"
-        configPath = "{dir_name}/yolov3.cfg"
+        labelsPath = dir_name + "/coco.names"
+        weightsPath = dir_name + "/yolov3-tiny.weights"
+        configPath = dir_name + "/yolov3.cfg"
         self.LABELS = open(labelsPath).read().strip().split("\n")
         self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
         
