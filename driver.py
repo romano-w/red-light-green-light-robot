@@ -50,7 +50,8 @@ class Driver():
 		self.frequency = frequency
 		self.min_threshold_distance = min_threshold_distance
 		self.goal_following_distance = goal_following_distance
-		self.distance_from_goal = 0
+		self.distance_from_goal = 0.0
+		self.target_off_center = 0.0
 		self.loops = 0
 		self.fsm = fsm.MOVE
 
@@ -93,6 +94,7 @@ class Driver():
 		if not self._close_obstacle:
 			if regions_['front'] < self.min_threshold_distance:
 				self._close_obstacle = True
+				self.fsm = fsm.AVOID
 
 	def _odom_callback(self, msg):
 		"""Callback to process odom."""
@@ -134,19 +136,18 @@ class Driver():
 		rate = rospy.Rate(self.frequency)
 		while self.loops > 0:
 			if self.fsm == fsm.MOVE:
-				currError = 0
-				currError = self.goal_following_distance - self.distance_from_goal
-				self.update_linear(currError)
-				# below this we will need to figure out how to control 
-				# message can be translated into linear and angular 
-				# velocities. Maybe two separate controls/PIDs ?
-				linear_vel = LINEAR_VELOCITY
-				angular_vel = self._control
+				linear_error = self.goal_following_distance - self.distance_from_goal
+				self.update_linear(linear_error)
+				angular_error = self.target_off_center
+				self.update_angular(linear_error)
+				linear_vel = self._linear_control
+				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
 			if self.fsm == fsm.AVOID:
 				continue
 			if self.fsm == fsm.LOST:
 				continue
+			rate.sleep()
 
 	def lost_mode(self):
 		self.move(0, self.angular_velocity)
