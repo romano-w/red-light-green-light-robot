@@ -53,7 +53,7 @@ class Driver():
 		self.distance_from_goal = 0.0
 		self.target_off_center = 0.0
 		self.loops = 0
-		self.fsm = fsm.MOVE
+		self.fsm = fsm.LOST
 
 		self.odom = np.zeros(3)
 
@@ -139,12 +139,17 @@ class Driver():
 				linear_error = self.goal_following_distance - self.distance_from_goal
 				self.update_linear(linear_error)
 				angular_error = self.target_off_center
-				self.update_angular(linear_error)
+				self.update_angular(angular_error)
 				linear_vel = self._linear_control
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
 			if self.fsm == fsm.AVOID:
-				continue
+    			# Turn until the obstacle is out of the way
+				if self._close_obstacle is True:
+					self.move(0, -self.angular_velocity)
+					self._close_obstacle = False
+
+			
 			if self.fsm == fsm.LOST:
 				continue
 			rate.sleep()
@@ -162,7 +167,6 @@ def main():
 
 	rospy.sleep(2)
 
-	# driver.translate(0.2)
 	# try:
 	#     driver.spin()
 	# except rospy.ROSInterruptException:
