@@ -108,6 +108,30 @@ class Vision():
             print(e)
 
 
+    # Function to retrieve the average distance of pixels from a bounding box
+    # depth_img = opencv image
+    # bounding_box = ((x1,y1)(x2,y2))
+    # Output: float in meters
+    def get_object_distance(self, depth_img, bounding_box):
+        #Checking if bounding box is inside depth img
+        if not self.is_inside(depth_img, bounding_box):
+            return None # TODO: Maybe throw error
+        
+        count = 0
+        for x in range(bounding_box[0][0], bounding_box[1][0]):
+            for y in range(bounding_box[0][1], bounding_box[1][1]):
+                count += depth_img[y,x]
+        
+        return count / (abs(bounding_box[0][0] - bounding_box[1][0]) * abs(bounding_box[0][1] - bounding_box[1][1]))
+
+    # Function to calculate the angle from the center of the robot to the object
+    # distance: float
+    # bounding_box = ((x1,y1)(x2,y2))
+    # Output: -pi/4 = left, 0 = center, pi/4 = right
+    def get_object_angle(self, distance, bounding_box):
+        return
+
+
 def main():
     vision = Vision()
     rospy.init_node("vision_node", anonymous=True)
