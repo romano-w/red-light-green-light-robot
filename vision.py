@@ -25,9 +25,9 @@ class fsm(Enum):
 
 class Vision():
     def __init__(self):
-        self.image_pub = rospy.Publisher("image_topic_2", Image, queue_size=1)
+        self.image_pub = rospy.Publisher("image_debug", Image, queue_size=1)
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("image_topic", Image, self._img_callback, queue_size=1)
+        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
 
         dir_name = "vizfiles"
 
@@ -99,6 +99,7 @@ class Vision():
                 personX = person[0]
                 personY = person[1]
                 self.state = fsm.PERSON_DETECTED
+                cv_image = cv2.circle(cv_image, (personX, personY), radius=3, color=(0, 0, 255), thickness=-1)
             else:
                 self.state = fsm.LOST
 
@@ -130,12 +131,14 @@ class Vision():
             return count / pixel_count
    
 
-    # Function to calculate the angle from the center of the robot to the object
-    # distance: float
+    # Function to calculate percentage from the center (of image) an object is
+    # img_width: float
     # object_xy = (x,y)
-    # Output: -pi/4 = left, 0 = center, pi/4 = right
-    def get_object_angle(self, distance, object_xy):
-        return
+    # Output: float. percentage from center of image: - = left. + = right
+    def get_object_percent_center(self, img_width, object_xy):
+        img_center = img_width // 2
+        dist_from_center = object_xy[0] - img_center
+        return (dist_from_center / img_center) * 100
 
 
 def main():
