@@ -110,25 +110,31 @@ class Vision():
 
     # Function to retrieve the average distance of pixels from a bounding box
     # depth_img = opencv image
-    # bounding_box = ((x1,y1)(x2,y2))
+    # object_xy = (x,y)
     # Output: float in meters
-    def get_object_distance(self, depth_img, bounding_box):
+    def get_object_distance(self, depth_img, object_xy, sample_area=5, simple=True):
         #Checking if bounding box is inside depth img
-        if not self.is_inside(depth_img, bounding_box):
+        if not self.is_inside(depth_img, object_xy):
             return None # TODO: Maybe throw error
         
-        count = 0
-        for x in range(bounding_box[0][0], bounding_box[1][0]):
-            for y in range(bounding_box[0][1], bounding_box[1][1]):
-                count += depth_img[y,x]
+        if simple:
+            return depth_img[object_xy[1], object_xy[0]]
         
-        return count / (abs(bounding_box[0][0] - bounding_box[1][0]) * abs(bounding_box[0][1] - bounding_box[1][1]))
+        else:
+            count = 0
+            for x in range(object_xy[0]-sample_area,object_xy[0]+sample_area):
+                for y in range(object_xy[1]-sample_area,object_xy[1]+sample_area):
+                    count += depth_img[y,x]
+            
+            pixel_count = pow(sample_area*2,2)
+            return count / pixel_count
+   
 
     # Function to calculate the angle from the center of the robot to the object
     # distance: float
-    # bounding_box = ((x1,y1)(x2,y2))
+    # object_xy = (x,y)
     # Output: -pi/4 = left, 0 = center, pi/4 = right
-    def get_object_angle(self, distance, bounding_box):
+    def get_object_angle(self, distance, object_xy):
         return
 
 
