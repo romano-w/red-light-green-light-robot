@@ -15,7 +15,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
 from enum import Enum
-
+import os
 
 class fsm(Enum):
     LOST = 0
@@ -25,24 +25,36 @@ class fsm(Enum):
 
 class Vision():
     def __init__(self):
-        self.image_pub = rospy.Publisher("image_debug", Image, queue_size=1)
+
+        #TODO:
+        # Node for publishing everything:
+            # pct_from_center: float
+            # distance_to_object: float
+            # face_detected: bool -> string = "True" "False"
+            # lost: bool -> string = "True" "False"
+            # string format: pct_from_center,distance_to_object,face_detected,lost
+
+        self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
 
-        dir_name = "vizfiles"
+        dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
+        print(cv2.__version__)
 
         self.state = fsm.LOST   # robot is initially lost
-        self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_default.xml')    # load face cascade
+        # self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_default.xml')    # load face cascade
         
         # code for loading yolo
         labelsPath = dir_name + "/coco.names"
         weightsPath = dir_name + "/yolov3-tiny.weights"
         configPath = dir_name + "/yolov3.cfg"
         self.LABELS = open(labelsPath).read().strip().split("\n")
-        self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
+        # self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
         
-        self.layer_names = self.net.getLayerNames()
-        self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
+        # self.layer_names = self.net.getLayerNames()
+        # self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
+
+        self._debug_image_seq_num = 0
 
     def face_found(self, img):
         # Convert into grayscale
@@ -88,23 +100,30 @@ class Vision():
         except CvBridgeError as e:
             print(e)
         
-        if self.face_found(cv_image):
+        if False and self.face_found(cv_image):
             # change state
             self.state = fsm.FACE_DETECTED
         else:
-            person = self.find_person(cv_image)
+            # person = self.find_person(cv_image)
             # change state
+            person = [100,50]
             if person:
                 #### Do something with these coordinates
                 personX = person[0]
                 personY = person[1]
                 self.state = fsm.PERSON_DETECTED
-                cv_image = cv2.circle(cv_image, (personX, personY), radius=3, color=(0, 0, 255), thickness=-1)
+                cv_image = image = cv2.putText(cv_image, 'Joe uses f strings in python2', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
             else:
                 self.state = fsm.LOST
 
         try:
-            self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
+            
+            img_out = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
+            img_out.header.frame_id = "camera_rgb_optical_frame"
+            img_out.header.seq = self._debug_image_seq_num
+            
+            self.image_pub.publish(img_out)
+            self._debug_image_seq_num += 1
         except CvBridgeError as e:
             print(e)
 
@@ -153,7 +172,8 @@ def main():
     rospy.init_node("vision_node", anonymous=True)
 
     try:
-        vision.main_loop()
+        rospy.spin()
+        # vision.main_loop()
     except rospy.ROSInterruptException:
         rospy.logerr("ROS node interruped")
 
