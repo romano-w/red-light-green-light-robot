@@ -27,7 +27,7 @@ class Vision():
     def __init__(self):
         self.image_pub = rospy.Publisher("image_topic_2", Image, queue_size=1)
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("image_topic", Image, self._img_callback, queue_size=1)
+        self.image_sub = rospy.Subscriber("camera/rgb/image_rect_color", Image, self._img_callback, queue_size=1)
 
         dir_name = "vizfiles"
 
@@ -87,7 +87,7 @@ class Vision():
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
             print(e)
-        
+
         if self.face_found(cv_image):
             # change state
             self.state = fsm.FACE_DETECTED

@@ -31,14 +31,16 @@ ANGULAR_VELOCITY = math.pi/6 # rad/s
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
 GOAL_FOLLOWING_DISTANCE = 1.5 # m, distance to maintain from target
 
+
 class fsm(Enum):
 	MOVE = 1
 	LOST = 2
 	AVOID = 3
 	FACE = 4
 
+  
 class Driver():
-	def __init__(self, frequency = FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
+	def __init__(self, frequency=FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
 		# TODO:
 		# Node for publishing everything:
@@ -178,6 +180,7 @@ class Driver():
 
 	def avoid_obstacle(self):
 		pass
+
 
 def main():
 	rospy.init_node("driver")
