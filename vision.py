@@ -38,12 +38,14 @@ class Vision():
 		self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
 		self.bridge = CvBridge()
 		self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
+		# self.depth_image_sub = rospy.Subscriber("/camera/depth/image", Image, self._depth_img_callback, queue_size=1)
 
-		dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
+		dir_name = "./vizfiles"
 		print(cv2.__version__)
 
 		self.state = fsm.LOST   # robot is initially lost
 		self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_alt2.xml')    # load face cascade
+		self.body_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_upperbody.xml')
 		
 		# code for loading yolo
 		labelsPath = dir_name + "/coco.names"
@@ -57,20 +59,22 @@ class Vision():
 
 		self._debug_image_seq_num = 0
 
+		self.depth_image = None
+
+
+	def scale_img(self,img,scale_factor):
+			width = int(img.shape[1] * scale_factor / 100)
+			height = int(img.shape[0] * scale_factor / 100)
+			dim = (width, height)
+			
+			# resize image
+			return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+	
+
 	def face_found(self, img):
-		# Convert into grayscale
-		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-		scale_percent = 60 # percent of original size
-		width = int(img.shape[1] * scale_percent / 100)
-		height = int(img.shape[0] * scale_percent / 100)
-		dim = (width, height)
-		
-		# resize image
-		resized = cv2.resize(gray, dim, interpolation = cv2.INTER_AREA)
-
 		# Detect faces
-		faces = self.face_cascade.detectMultiScale(resized, 1.1, 4)
+		faces = self.face_cascade.detectMultiScale(img, 1.1, 4)
 
 		# do we have faces
 		return len(faces) > 0
@@ -105,41 +109,58 @@ class Vision():
 
 		return False
 
+	def find_person_haar_cascade(self,img):
+		bodies = self.body_cascade.detectMultiScale(img, 1.1, 4)
+		if len(bodies) > 0:
+			body = bodies[0]
+			return body[0] + (body[2] // 2), body[1] + (body[3] // 2)
+		else:
+			return False
+
+
+	def _depth_img_callback(self, data):
+		self.depth_image = self.scale_img(self.bridge.imgmsg_to_cv2(data, "passthrough"), 60)
 
 	def _img_callback(self, data):
 		try:
-			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+			cv_image_original = self.bridge.imgmsg_to_cv2(data, "bgr8")
+
+			cv_image = self.scale_img(cv_image_original, 60)
+			gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+
 		except CvBridgeError as e:
 			print(e)
 		
-		if False and self.face_found(cv_image):
+		if self.face_found(gray):
 			# change state
 			self.state = fsm.FACE_DETECTED
+			self.publish_vision_info(None, None)
 			print("FaceFound")
-			# cv_image = image = cv2.putText(cv_image, 'FACE DETECTED', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-		else:
-			# cv_image = image = cv2.putText(cv_image, 'NO FACE', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-			print("starting")
-			person = self.find_person(cv_image)
-			# change state
 
+		else:
+			# person = self.find_person(cv_image)
+			person = self.find_person_haar_cascade(gray)
+			person = None
+			# change state
 			if person:
-				print(person)
 				#### Do something with these coordinates
-				personX = person[0]
-				personY = person[1]
 				self.state = fsm.PERSON_DETECTED
+				distance = self.get_object_distance(self.depth_image, person)
+				pct_from_center = self.get_object_percent_center(cv_image.shape[1], person)
+				print("distance: ", distance, "pct from center: ", pct_from_center)
+				
+				self.publish_vision_info(pct_from_center, distance)
+
 			else:
 				print("no person")
+				self.publish_vision_info(None, None)
 				self.state = fsm.LOST
 
 		try:
-			
-			img_out = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
+			img_out = self.bridge.cv2_to_imgmsg(cv_image_original, "bgr8")
 			img_out.header.frame_id = "camera_rgb_optical_frame"
 			img_out.header.seq = self._debug_image_seq_num
-			
-			# self.image_pub.publish(img_out)
+			self.image_pub.publish(img_out)
 			self._debug_image_seq_num += 1
 		except CvBridgeError as e:
 			print(e)
@@ -151,8 +172,8 @@ class Vision():
 	# Output: float in meters
 	def get_object_distance(self, depth_img, object_xy, sample_area=5, simple=True):
 		#Checking if bounding box is inside depth img
-		if not self.is_inside(depth_img, object_xy):
-			return None # TODO: Maybe throw error
+		# if not self.is_inside(depth_img, object_xy):
+		# 	return None # TODO: Maybe throw error
 		
 		if simple:
 			return depth_img[object_xy[1], object_xy[0]]
@@ -181,10 +202,17 @@ class Vision():
 		out_msg = String()
 		lost = "True" if self.state == fsm.LOST else "False"
 		face = "True" if self.state == fsm.FACE_DETECTED else "False"
-		out_msg.data = str(pct_from_center) + "," + str(distance_to_object) + "," + lost + "," + face
+		pct = "None" if pct_from_center == None else str(pct_from_center)
+		dst =  "None" if distance_to_object == None else str(distance_to_object)
+		out_msg.data = pct + "," + dst + "," + lost + "," + face
 
 		self.vision_pub.publish(out_msg)
 
+	def main_loop(self):
+		rate = rospy.Rate(60)
+		while not rospy.is_shutdown():
+			self.publish_vision_info(None, None)
+			rate.sleep()
 
 
 def main():
@@ -192,8 +220,8 @@ def main():
 	rospy.init_node("vision_node", anonymous=True)
 
 	try:
-		rospy.spin()
-		# vision.main_loop()
+		# rospy.spin()
+		vision.main_loop()
 	except rospy.ROSInterruptException:
 		rospy.logerr("ROS node interruped")
 
