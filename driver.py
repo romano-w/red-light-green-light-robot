@@ -13,6 +13,7 @@ from enum import Enum
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 # Topic names
@@ -30,16 +31,28 @@ ANGULAR_VELOCITY = math.pi/6 # rad/s
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
 GOAL_FOLLOWING_DISTANCE = 1.5 # m, distance to maintain from target
 
+
 class fsm(Enum):
 	MOVE = 1
 	LOST = 2
 	AVOID = 3
+	FACE = 4
+
 
 class Driver():
 	def __init__(self, frequency=FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
+		# TODO:
+		# Node for publishing everything:
+			# pct_from_center: float
+			# distance_to_object: float
+			# face_detected: bool -> string = "True" "False"
+			# lost: bool -> string = "True" "False"
+			# string format: pct_from_center,distance_to_object,face_detected,lost
 
-		# Set up subscribers and publishers
+		self._vision_sub = rospy.Subscriber("vision_node", String, self._vision_callback)
+
+    # Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
 		self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
 		self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
@@ -59,15 +72,17 @@ class Driver():
 
 		# Flag used to control the behavior of the robot.
 		self._close_obstacle = False # Flag variable that is true if there is a close obstacle.
+		self.face_detected = False # Flag for if the robot should stop for face
 
 		# PD gain values
-		self._kp = 1
-		self._kd = 100
-		self._k = 1
-
+		self._linear_kp = 1
+		self._linear_kd = 100
 		self._linear_control = 0.0 # current control message for linear velocity
-		self._angular_control = 0.0 # current control message for angular velocity
 		self._linear_error = 0.0 # current linear error
+
+		self._angular_kp = 1
+		self._angular_kd = 100
+		self._angular_control = 0.0 # current control message for angular velocity
 		self._angular_error = 0.0 # current angular error
 		self._prev_error = 0.0 # previous error
 		self._dt = 1 / float(FREQUENCY)
@@ -121,6 +136,17 @@ class Driver():
 		eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
+    def _vision_callback(self, msg):
+		data = msg.data.split(",")
+		self.target_off_center = float(data[0])
+		self.distance_from_goal = float(data[1])
+		if data[2] == "True":
+			self.fsm = fsm.FACE
+		elif data[3] == "True":
+			self.fsm = fsm.LOST
+		elif self.fsm != fsm.AVOID:
+			self.fsm = fsm.MOVE
+
     def _w_follow_error(self, a, b, c):
         """Calculates the true distance from the wall.
         a -- the forward laser reading of the fov
@@ -146,15 +172,15 @@ class Driver():
 	def update_linear(self, err):
 		self._prev_error = self._linear_error
 		self._linear_error = err
-		d_term =  float((self._error - self._prev_error) / float(self._dt))
-		self._linear_control = self._kp * self._error + self._kd * d_term
+		d_term =  float((self._linear_error - self._prev_error) / float(self._dt))
+		self._linear_control = self._linear_kp * self._linear_error + self._linear_kd * d_term
 
 	def update_angular(self, err):
-		# takes in a percentage from center
+		# takes in a percentage from center (will also be positive or negative)
 		self._prev_error = self._angular_error
 		self._angular_error = err
-		d_term =  float((self._error - self._prev_error) / float(self._dt))
-		self._angular_control = self._kp * self._error + self._kd * d_term
+		d_term =  float((self._angular_error - self._prev_error) / float(self._dt))
+		self._angular_control = self._angular_kp * self._angular_error + self._angular_kd * d_term
 
 	def stop(self):
 		"""Stops the robot."""
@@ -181,7 +207,7 @@ class Driver():
 				linear_vel = self._linear_control
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
-			if self.fsm == fsm.AVOID:
+			elif self.fsm == fsm.AVOID:
 				# Turn until the obstacle is out of the way
 				if self._close_obstacle is True:
 					self.move(0, -self.angular_velocity)
@@ -192,8 +218,9 @@ class Driver():
 				elif not self._close_obstacle:		# Wall follow mode
 					rot = self._w_follow_pid_angle()
 	                self.move(self.linear_velocity, rot)
-
-			if self.fsm == fsm.LOST:
+			elif self.fsm == fsm.FACE:
+				self.move(0,0)
+			elif self.fsm == fsm.LOST:
 				self.lost_mode()
 			rate.sleep()
 
@@ -202,6 +229,7 @@ class Driver():
 
 	def avoid_obstacle(self):
 		pass
+
 
 def main():
 	rospy.init_node("driver")
