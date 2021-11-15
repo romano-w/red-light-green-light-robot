@@ -82,6 +82,7 @@ class Driver():
         self._predicted_e_time = 1          # The amount of time in the future to calculate predicted error
         self._wall_p = kp               # Proportional term weight
         self._wall_d = kd               # Derivative term weight
+		self._wall_k = k                         # K offset constant term
         self._wall_errs = []            # Error history
 
 		self._wall_follow_distance = 0.2 # m
@@ -137,9 +138,9 @@ class Driver():
         return -- rotation angle
         """
         self._wall_errs.append()
-        u = self._k + self._p * err
+        u = self._wall_k + self._wall_p * err
         if len(self._wall_errs) > 2:
-            u += self._d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
+            u += self._wall_d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
         return u
 
 	def update_linear(self, err):
@@ -193,7 +194,7 @@ class Driver():
 	                self.move(self.linear_velocity, rot)
 
 			if self.fsm == fsm.LOST:
-				continue
+				self.lost_mode()
 			rate.sleep()
 
 	def lost_mode(self):
