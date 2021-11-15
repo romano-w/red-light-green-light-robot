@@ -11,11 +11,12 @@ import numpy as np
 import sys
 import rospy
 import cv2
+import cv3
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
 from enum import Enum
-
+import os
 
 class fsm(Enum):
     LOST = 0
@@ -25,24 +26,37 @@ class fsm(Enum):
 
 class Vision():
     def __init__(self):
-        self.image_pub = rospy.Publisher("image_topic_2", Image, queue_size=1)
-        self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("camera/rgb/image_rect_color", Image, self._img_callback, queue_size=1)
 
-        dir_name = "vizfiles"
+        #TODO:
+        # Node for publishing everything:
+            # pct_from_center: float
+            # distance_to_object: float
+            # face_detected: bool -> string = "True" "False"
+            # lost: bool -> string = "True" "False"
+            # string format: pct_from_center,distance_to_object,face_detected,lost
+
+        self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
+        self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
+        self.bridge = CvBridge()
+        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
+
+        dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
+        print(cv2.__version__)
 
         self.state = fsm.LOST   # robot is initially lost
-        self.face_cascade = cv2.CascadeClassifier('{dir_name}/haarcascade_frontalface_default.xml')    # load face cascade
+        # self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_default.xml')    # load face cascade
         
         # code for loading yolo
-        labelsPath = "{dir_name}/coco.names"
-        weightsPath = "{dir_name}/yolov3-tiny.weights"
-        configPath = "{dir_name}/yolov3.cfg"
+        labelsPath = dir_name + "/coco.names"
+        weightsPath = dir_name + "/yolov3-tiny.weights"
+        configPath = dir_name + "/yolov3.cfg"
         self.LABELS = open(labelsPath).read().strip().split("\n")
-        self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
+        # self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
         
-        self.layer_names = self.net.getLayerNames()
-        self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
+        # self.layer_names = self.net.getLayerNames()
+        # self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
+
+        self._debug_image_seq_num = 0
 
     def face_found(self, img):
         # Convert into grayscale
@@ -87,49 +101,71 @@ class Vision():
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
             print(e)
-
-        if self.face_found(cv_image):
+        
+        if False and self.face_found(cv_image):
             # change state
             self.state = fsm.FACE_DETECTED
         else:
-            person = self.find_person(cv_image)
+            # person = self.find_person(cv_image)
             # change state
+            person = [100,50]
             if person:
                 #### Do something with these coordinates
                 personX = person[0]
                 personY = person[1]
                 self.state = fsm.PERSON_DETECTED
+                cv_image = image = cv2.putText(cv_image, 'Joe uses f strings in python2', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
             else:
                 self.state = fsm.LOST
 
         try:
-            self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
+            
+            img_out = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
+            img_out.header.frame_id = "camera_rgb_optical_frame"
+            img_out.header.seq = self._debug_image_seq_num
+            
+            self.image_pub.publish(img_out)
+            self._debug_image_seq_num += 1
         except CvBridgeError as e:
             print(e)
 
 
     # Function to retrieve the average distance of pixels from a bounding box
     # depth_img = opencv image
-    # bounding_box = ((x1,y1)(x2,y2))
+    # object_xy = (x,y)
     # Output: float in meters
-    def get_object_distance(self, depth_img, bounding_box):
+    def get_object_distance(self, depth_img, object_xy, sample_area=5, simple=True):
         #Checking if bounding box is inside depth img
-        if not self.is_inside(depth_img, bounding_box):
+        if not self.is_inside(depth_img, object_xy):
             return None # TODO: Maybe throw error
         
-        count = 0
-        for x in range(bounding_box[0][0], bounding_box[1][0]):
-            for y in range(bounding_box[0][1], bounding_box[1][1]):
-                count += depth_img[y,x]
+        if simple:
+            return depth_img[object_xy[1], object_xy[0]]
         
-        return count / (abs(bounding_box[0][0] - bounding_box[1][0]) * abs(bounding_box[0][1] - bounding_box[1][1]))
+        else:
+            count = 0
+            for x in range(object_xy[0]-sample_area,object_xy[0]+sample_area):
+                for y in range(object_xy[1]-sample_area,object_xy[1]+sample_area):
+                    count += depth_img[y,x]
+            
+            pixel_count = pow(sample_area*2,2)
+            return count / pixel_count
+   
 
-    # Function to calculate the angle from the center of the robot to the object
-    # distance: float
-    # bounding_box = ((x1,y1)(x2,y2))
-    # Output: -pi/4 = left, 0 = center, pi/4 = right
-    def get_object_angle(self, distance, bounding_box):
-        return
+    # Function to calculate percentage from the center (of image) an object is
+    # img_width: float
+    # object_xy = (x,y)
+    # Output: float. percentage from center of image: - = left. + = right
+    def get_object_percent_center(self, img_width, object_xy):
+        img_center = img_width // 2
+        dist_from_center = object_xy[0] - img_center
+        return (dist_from_center / img_center) * 100
+
+
+    def publish_vision_info(self, pct_from_center, distance_to_object):
+        out_msg = String()
+        out = str(pct_from_center) + "," + str(distance_to_object) + "," + 
+
 
 
 def main():
@@ -137,8 +173,8 @@ def main():
     rospy.init_node("vision_node", anonymous=True)
 
     try:
-        # vision.spin()
         rospy.spin()
+        # vision.main_loop()
     except rospy.ROSInterruptException:
         rospy.logerr("ROS node interruped")
 
