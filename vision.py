@@ -11,6 +11,7 @@ import numpy as np
 import sys
 import rospy
 import cv2
+import cv3
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
@@ -35,6 +36,7 @@ class Vision():
             # string format: pct_from_center,distance_to_object,face_detected,lost
 
         self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
+        self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
 
