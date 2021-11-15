@@ -73,12 +73,14 @@ class Driver():
 		self.face_detected = False # Flag for if the robot should stop for face
 
 		# PD gain values
-		self._kp = 1
-		self._kd = 100
-
+		self._linear_kp = 1
+		self._linear_kd = 100
 		self._linear_control = 0.0 # current control message for linear velocity
-		self._angular_control = 0.0 # current control message for angular velocity
 		self._linear_error = 0.0 # current linear error
+
+		self._angular_kp = 1
+		self._angular_kd = 100
+		self._angular_control = 0.0 # current control message for angular velocity
 		self._angular_error = 0.0 # current angular error
 		self._prev_error = 0.0 # previous error
 		self._dt = 1 / float(FREQUENCY)
@@ -130,15 +132,15 @@ class Driver():
 	def update_linear(self, err):
 		self._prev_error = self._linear_error
 		self._linear_error = err
-		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
-		self._linear_control = self._kp * self._error + self._kd * d_term
+		d_term =  float((self._linear_error - self._prev_error) / float(self._dt)) 
+		self._linear_control = self._linear_kp * self._linear_error + self._linear_kd * d_term
 	
 	def update_angular(self, err):
 		# takes in a percentage from center (will also be positive or negative)
 		self._prev_error = self._angular_error
 		self._angular_error = err
-		d_term =  float((self._error - self._prev_error) / float(self._dt)) 
-		self._angular_control = self._kp * self._error + self._kd * d_term
+		d_term =  float((self._angular_error - self._prev_error) / float(self._dt)) 
+		self._angular_control = self._angular_kp * self._angular_error + self._angular_kd * d_term
 
 	def stop(self):
 		"""Stops the robot."""
