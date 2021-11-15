@@ -21,7 +21,7 @@ DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
 DEFAULT_SCAN_TOPIC = 'base_scan' # on the robot it is called 'scan'
 
 # Frequency at which the loop operates
-FREQUENCY = 30 #Hz.
+FREQUENCY = 5 #Hz.
 
 # Velocities that will be used (feel free to tune)
 LINEAR_VELOCITY = .1 # m/s
@@ -29,7 +29,7 @@ ANGULAR_VELOCITY = math.pi/6 # rad/s
 
 # Threshold distances
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
-GOAL_FOLLOWING_DISTANCE = 1.5 # m, distance to maintain from target
+GOAL_FOLLOWING_DISTANCE = 2.0 # m, distance to maintain from target
 
 
 class fsm(Enum):
@@ -50,7 +50,7 @@ class Driver():
 			# lost: bool -> string = "True" "False"
 			# string format: pct_from_center,distance_to_object,face_detected,lost
 
-		self._vision_sub = rospy.Subscriber("vision_node", String, self._vision_callback)
+		self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
 
 	# Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -75,12 +75,12 @@ class Driver():
 		self.face_detected = False # Flag for if the robot should stop for face
 
 		# PD gain values
-		self._linear_kp = 1
+		self._linear_kp = .1
 		self._linear_kd = 100
 		self._linear_control = 0.0 # current control message for linear velocity
 		self._linear_error = 0.0 # current linear error
 
-		self._angular_kp = 1
+		self._angular_kp = .01
 		self._angular_kd = 100
 		self._angular_control = 0.0 # current control message for angular velocity
 		self._angular_error = 0.0 # current angular error
@@ -95,9 +95,9 @@ class Driver():
 
 		# Wall follow PID params
 		self._predicted_e_time = 1          # The amount of time in the future to calculate predicted error
-		self._wall_p = kp               # Proportional term weight
-		self._wall_d = kd               # Derivative term weight
-		self._wall_k = k                         # K offset constant term
+		self._wall_p = 1               # Proportional term weight
+		self._wall_d = 100               # Derivative term weight
+		self._wall_k = 0                         # K offset constant term
 		self._wall_errs = []            # Error history
 
 		self._wall_follow_distance = 0.2 # m
@@ -137,9 +137,12 @@ class Driver():
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
 	def _vision_callback(self, msg):
+		print(msg.data)
 		data = msg.data.split(",")
-		self.target_off_center = float(data[0])
-		self.distance_from_goal = float(data[1])
+		if data[0] != "None":
+			self.target_off_center = float(data[0])
+		if data[1] != "None":
+			self.distance_from_goal = float(data[1])
 		if data[2] == "True":
 			self.fsm = fsm.FACE
 		elif data[3] == "True":
@@ -200,6 +203,7 @@ class Driver():
 		rate = rospy.Rate(self.frequency)
 		while not rospy.is_shutdown():
 			if self.fsm == fsm.MOVE:
+				print("FOLLOWING")
 				linear_error = self.goal_following_distance - self.distance_from_goal
 				self.update_linear(linear_error)
 				angular_error = self.target_off_center
@@ -219,8 +223,10 @@ class Driver():
 					rot = self._w_follow_pid_angle()
 					self.move(self.linear_velocity, rot)
 			elif self.fsm == fsm.FACE:
+				print("RED LIGHT")
 				self.move(0,0)
 			elif self.fsm == fsm.LOST:
+				print("HELP I'M LOST")
 				self.lost_mode()
 			rate.sleep()
 

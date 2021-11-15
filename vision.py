@@ -17,6 +17,9 @@ from cv_bridge import CvBridge, CvBridgeError
 from enum import Enum
 import os
 
+SCALE_FACE_CONST = 30
+SCALE_BODY_CONST = 30
+
 class fsm(Enum):
 	LOST = 0
 	PERSON_DETECTED = 1
@@ -26,21 +29,15 @@ class fsm(Enum):
 class Vision():
 	def __init__(self):
 
-		#TODO:
-		# Node for publishing everything:
-			# pct_from_center: float
-			# distance_to_object: float
-			# face_detected: bool -> string = "True" "False"
-			# lost: bool -> string = "True" "False"
-			# string format: pct_from_center,distance_to_object,face_detected,lost
 
 		self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
 		self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
 		self.bridge = CvBridge()
 		self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
-		# self.depth_image_sub = rospy.Subscriber("/camera/depth/image", Image, self._depth_img_callback, queue_size=1)
+		self.depth_image_sub = rospy.Subscriber("/camera/depth/image", Image, self._depth_img_callback, queue_size=1)
 
-		dir_name = "./vizfiles"
+		#dir_name = "./vizfiles"
+		dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
 		print(cv2.__version__)
 
 		self.state = fsm.LOST   # robot is initially lost
@@ -119,19 +116,20 @@ class Vision():
 
 
 	def _depth_img_callback(self, data):
-		self.depth_image = self.scale_img(self.bridge.imgmsg_to_cv2(data, "passthrough"), 60)
+		self.depth_image = self.scale_img(self.bridge.imgmsg_to_cv2(data, "passthrough"), SCALE_BODY_CONST)
 
 	def _img_callback(self, data):
 		try:
 			cv_image_original = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
-			cv_image = self.scale_img(cv_image_original, 60)
-			gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+			gray = cv2.cvtColor(cv_image_original, cv2.COLOR_BGR2GRAY)
+			cv_image_face = self.scale_img(gray, SCALE_FACE_CONST)
+			cv_image_body = self.scale_img(gray, SCALE_BODY_CONST)
 
 		except CvBridgeError as e:
 			print(e)
 		
-		if self.face_found(gray):
+		if self.face_found(cv_image_face):
 			# change state
 			self.state = fsm.FACE_DETECTED
 			self.publish_vision_info(None, None)
@@ -139,15 +137,15 @@ class Vision():
 
 		else:
 			# person = self.find_person(cv_image)
-			person = self.find_person_haar_cascade(gray)
-			person = None
+			person = self.find_person_haar_cascade(cv_image_body)
+			# person = None
 			# change state
 			if person:
 				#### Do something with these coordinates
 				self.state = fsm.PERSON_DETECTED
 				distance = self.get_object_distance(self.depth_image, person)
-				pct_from_center = self.get_object_percent_center(cv_image.shape[1], person)
-				print("distance: ", distance, "pct from center: ", pct_from_center)
+				pct_from_center = self.get_object_percent_center(cv_image_body.shape[1], person)
+				print("person_x_y: ", person[0], person[1], "distance: ", distance, "pct from center: ", pct_from_center)
 				
 				self.publish_vision_info(pct_from_center, distance)
 
@@ -195,7 +193,7 @@ class Vision():
 	def get_object_percent_center(self, img_width, object_xy):
 		img_center = img_width // 2
 		dist_from_center = object_xy[0] - img_center
-		return (dist_from_center / img_center) * 100
+		return (float(dist_from_center) / float(img_center)) * 100
 
 
 	def publish_vision_info(self, pct_from_center, distance_to_object):
@@ -204,14 +202,14 @@ class Vision():
 		face = "True" if self.state == fsm.FACE_DETECTED else "False"
 		pct = "None" if pct_from_center == None else str(pct_from_center)
 		dst =  "None" if distance_to_object == None else str(distance_to_object)
-		out_msg.data = pct + "," + dst + "," + lost + "," + face
+		out_msg.data = pct + "," + dst + "," + face + "," + lost
 
 		self.vision_pub.publish(out_msg)
 
 	def main_loop(self):
 		rate = rospy.Rate(60)
 		while not rospy.is_shutdown():
-			self.publish_vision_info(None, None)
+			# self.publish_vision_info(None, None)
 			rate.sleep()
 
 
