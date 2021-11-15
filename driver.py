@@ -24,10 +24,10 @@ DEFAULT_SCAN_TOPIC = 'base_scan' # on the robot it is called 'scan'
 FREQUENCY = 30 #Hz.
 
 # Velocities that will be used (feel free to tune)
-LINEAR_VELOCITY = .2 # m/s
+LINEAR_VELOCITY = .1 # m/s
 ANGULAR_VELOCITY = math.pi/6 # rad/s
 
-# Threshold distances 
+# Threshold distances
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
 GOAL_FOLLOWING_DISTANCE = 1.5 # m, distance to maintain from target
 
@@ -52,7 +52,7 @@ class Driver():
 
 		self._vision_sub = rospy.Subscriber("vision_node", String, self._vision_callback)
 
-		# Set up subscribers and publishers
+    # Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
 		self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
 		self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
@@ -66,7 +66,7 @@ class Driver():
 		self.distance_from_goal = 0.0
 		self.target_off_center = 0.0
 		self.loops = 0
-		self.fsm = fsm.MOVE
+		self.fsm = fsm.LOST
 
 		self.odom = np.zeros(3)
 
@@ -93,9 +93,24 @@ class Driver():
 		self._prev_error = 0.0 # previous error
 		self._dt = 1 / float(FREQUENCY)
 
+		# Wall follow PID params
+        self._predicted_e_time = 1          # The amount of time in the future to calculate predicted error
+        self._wall_p = kp               # Proportional term weight
+        self._wall_d = kd               # Derivative term weight
+        self._wall_errs = []            # Error history
+
+		self._wall_follow_distance = 0.2 # m
+
+        self.left_scan_angle = [80.0 / 180 * math.pi, 100.0 / 180 * math.pi]
+        self.right_scan_angle = [-100.0 / 180 * math.pi, -80.0 / 180 * math.pi]
+        self.front_scan_angle = [-25.0 / 180 * math.pi, 25.0 / 180 * math.pi]
+        self.theta = 20                 # The theta values between min and max scan angles (both same)
+
+        self._wall_e = 0
+
 	def _laser_callback(self, msg):
 		"""Processes laser message."""
-		
+
 		for i in range(len(msg.ranges)/2):
 			if msg.ranges[i] < distance_from_wall:
 				distance_from_wall = msg.ranges[i]
@@ -120,7 +135,7 @@ class Driver():
 		eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
-	def _vision_callback(self, msg):
+    def _vision_callback(self, msg):
 		data = msg.data.split(",")
 		self.target_off_center = float(data[0])
 		self.distance_from_goal = float(data[1])
@@ -130,6 +145,28 @@ class Driver():
 			self.fsm = fsm.LOST
 		elif self.fsm != fsm.AVOID:
 			self.fsm = fsm.MOVE
+
+    def _w_follow_error(self, a, b, c):
+        """Calculates the true distance from the wall.
+        a -- the forward laser reading of the fov
+        b -- the laser reading perpendicular to robot
+        c -- the rear laser reading of the fov
+        """
+        alpha = math.atan((a * math.cos(self.theta) - c) / (a * math.sin(self.theta)))
+        instant_dist = b * math.cos(alpha)
+        future_dist = instant_dist + (self._predicted_e_time * self.linear_velocity * math.sin(alpha))
+        error = self._wall_follow_distance - future_dist
+        self._wall_e = error
+
+	def _w_follow_pid_angle(self):
+        """Calculate the angle to turn for this step.
+        return -- rotation angle
+        """
+        self._wall_errs.append()
+        u = self._k + self._p * err
+        if len(self._wall_errs) > 2:
+            u += self._d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
+        return u
 
 	def update_linear(self, err):
 		self._prev_error = self._linear_error
@@ -157,10 +194,10 @@ class Driver():
 		twist_msg.linear.x = linear_vel
 		twist_msg.angular.z = angular_vel
 		self._cmd_pub.publish(twist_msg)
-	
+
 	def spin(self):
 		rate = rospy.Rate(self.frequency)
-		while self.loops > 0:
+		while not rospy.is_shutdown():
 			if self.fsm == fsm.MOVE:
 				linear_error = self.goal_following_distance - self.distance_from_goal
 				self.update_linear(linear_error)
@@ -169,11 +206,20 @@ class Driver():
 				linear_vel = self._linear_control
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
-			if self.fsm == fsm.AVOID:
-				continue
-			if self.fsm == fsm.FACE:
+			elif self.fsm == fsm.AVOID:
+				# Turn until the obstacle is out of the way
+				if self._close_obstacle is True:
+					self.move(0, -self.angular_velocity)
+					self._close_obstacle = False
+				# Then start traversing the obstacle
+				# We will get a signal from the vision.py once the person
+				# is back in sight of the camera
+				elif not self._close_obstacle:		# Wall follow mode
+					rot = self._w_follow_pid_angle()
+	                self.move(self.linear_velocity, rot)
+			elif self.fsm == fsm.FACE:
 				self.move(0,0)
-			if self.fsm == fsm.LOST:
+			elif self.fsm == fsm.LOST:
 				continue
 			rate.sleep()
 
@@ -191,7 +237,6 @@ def main():
 
 	rospy.sleep(2)
 
-	# driver.translate(0.2)
 	# try:
 	#     driver.spin()
 	# except rospy.ROSInterruptException:
