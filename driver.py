@@ -220,7 +220,7 @@ class Driver():
 			elif self.fsm == fsm.FACE:
 				self.move(0,0)
 			elif self.fsm == fsm.LOST:
-				continue
+				self.lost_mode()
 			rate.sleep()
 
 	def lost_mode(self):
