@@ -11,7 +11,6 @@ import numpy as np
 import sys
 import rospy
 import cv2
-import cv3
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
