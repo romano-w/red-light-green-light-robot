@@ -210,10 +210,10 @@ def main():
 
 	rospy.sleep(2)
 
-	# try:
-	#     driver.spin()
-	# except rospy.ROSInterruptException:
-	#     rospy.logerr("ROS node interruped")
+	try:
+	    driver.spin()
+	except rospy.ROSInterruptException:
+	    rospy.logerr("ROS node interruped")
 
 if __name__ == "__main__":
 	main()
