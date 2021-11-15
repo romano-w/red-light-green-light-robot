@@ -18,166 +18,186 @@ from enum import Enum
 import os
 
 class fsm(Enum):
-    LOST = 0
-    PERSON_DETECTED = 1
-    FACE_DETECTED = 2
+	LOST = 0
+	PERSON_DETECTED = 1
+	FACE_DETECTED = 2
 
 
 class Vision():
-    def __init__(self):
+	def __init__(self):
 
-        #TODO:
-        # Node for publishing everything:
-            # pct_from_center: float
-            # distance_to_object: float
-            # face_detected: bool -> string = "True" "False"
-            # lost: bool -> string = "True" "False"
-            # string format: pct_from_center,distance_to_object,face_detected,lost
+		#TODO:
+		# Node for publishing everything:
+			# pct_from_center: float
+			# distance_to_object: float
+			# face_detected: bool -> string = "True" "False"
+			# lost: bool -> string = "True" "False"
+			# string format: pct_from_center,distance_to_object,face_detected,lost
 
-        self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
-        self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
-        self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
+		self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
+		self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
+		self.bridge = CvBridge()
+		self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
 
-        dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
-        print(cv2.__version__)
+		dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
+		print(cv2.__version__)
 
-        self.state = fsm.LOST   # robot is initially lost
-        # self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_default.xml')    # load face cascade
-        
-        # code for loading yolo
-        labelsPath = dir_name + "/coco.names"
-        weightsPath = dir_name + "/yolov3-tiny.weights"
-        configPath = dir_name + "/yolov3.cfg"
-        self.LABELS = open(labelsPath).read().strip().split("\n")
-        # self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
-        
-        # self.layer_names = self.net.getLayerNames()
-        # self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
+		self.state = fsm.LOST   # robot is initially lost
+		self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_alt2.xml')    # load face cascade
+		
+		# code for loading yolo
+		labelsPath = dir_name + "/coco.names"
+		weightsPath = dir_name + "/yolov3-tiny.weights"
+		configPath = dir_name + "/yolov3.cfg"
+		self.LABELS = open(labelsPath).read().strip().split("\n")
+		self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
+		
+		self.layer_names = self.net.getLayerNames()
+		self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
 
-        self._debug_image_seq_num = 0
+		self._debug_image_seq_num = 0
 
-    def face_found(self, img):
-        # Convert into grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # Detect faces
-        faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
+	def face_found(self, img):
+		# Convert into grayscale
+		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # do we have faces
-        return len(faces) > 0
+		scale_percent = 60 # percent of original size
+		width = int(img.shape[1] * scale_percent / 100)
+		height = int(img.shape[0] * scale_percent / 100)
+		dim = (width, height)
+		
+		# resize image
+		resized = cv2.resize(gray, dim, interpolation = cv2.INTER_AREA)
 
-    # function implemented with help from https://www.pyimagesearch.com/2018/11/12/yolo-object-detection-with-opencv/
-    def person_found(self, img):
+		# Detect faces
+		faces = self.face_cascade.detectMultiScale(resized, 1.1, 4)
 
-        (H, W) = img.shape[:2]
+		# do we have faces
+		return len(faces) > 0
 
-        blob = cv2.dnn.blobFromImage(img, 1 / 255.0, (416, 416), swapRB=True, crop=False)
-        self.net.setInput(blob)
-        layerOutputs = self.net.forward(self.layer_names)
+	# function implemented with help from https://www.pyimagesearch.com/2018/11/12/yolo-object-detection-with-opencv/
+	def find_person(self, img):
 
-        for output in layerOutputs:
-            # loop over each of the detections
-            for detection in output:
-                # extract the class ID and confidence (i.e., probability) of
-                # the current object detection
-                scores = detection[5:]
-                classID = np.argmax(scores)
-                confidence = scores[classID]
-                # filter out weak predictions
-                if confidence > 0.5:
-                    # scale box by image size and get center
-                    box = detection[0:4] * np.array([W, H, W, H])
-                    (centerX, centerY, _, _) = box.astype("int")
-                    
-                    if self.LABELS[classID] == "person":
-                        return (centerX, centerY)
-
-        return False
+		(H, W) = img.shape[:2]
 
 
-    def _img_callback(self, data):
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError as e:
-            print(e)
-        
-        if False and self.face_found(cv_image):
-            # change state
-            self.state = fsm.FACE_DETECTED
-        else:
-            # person = self.find_person(cv_image)
-            # change state
-            person = [100,50]
-            if person:
-                #### Do something with these coordinates
-                personX = person[0]
-                personY = person[1]
-                self.state = fsm.PERSON_DETECTED
-                cv_image = image = cv2.putText(cv_image, 'Joe uses f strings in python2', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-            else:
-                self.state = fsm.LOST
-
-        try:
-            
-            img_out = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
-            img_out.header.frame_id = "camera_rgb_optical_frame"
-            img_out.header.seq = self._debug_image_seq_num
-            
-            self.image_pub.publish(img_out)
-            self._debug_image_seq_num += 1
-        except CvBridgeError as e:
-            print(e)
+		blob = cv2.dnn.blobFromImage(img, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+		self.net.setInput(blob)
+		layerOutputs = self.net.forward(self.layer_names)
 
 
-    # Function to retrieve the average distance of pixels from a bounding box
-    # depth_img = opencv image
-    # object_xy = (x,y)
-    # Output: float in meters
-    def get_object_distance(self, depth_img, object_xy, sample_area=5, simple=True):
-        #Checking if bounding box is inside depth img
-        if not self.is_inside(depth_img, object_xy):
-            return None # TODO: Maybe throw error
-        
-        if simple:
-            return depth_img[object_xy[1], object_xy[0]]
-        
-        else:
-            count = 0
-            for x in range(object_xy[0]-sample_area,object_xy[0]+sample_area):
-                for y in range(object_xy[1]-sample_area,object_xy[1]+sample_area):
-                    count += depth_img[y,x]
-            
-            pixel_count = pow(sample_area*2,2)
-            return count / pixel_count
+		for output in layerOutputs:
+			# loop over each of the detections
+			for detection in output:
+				# extract the class ID and confidence (i.e., probability) of
+				# the current object detection
+				scores = detection[5:]
+				classID = np.argmax(scores)
+				confidence = scores[classID]
+				# filter out weak predictions
+				if confidence > 0.5:
+					# scale box by image size and get center
+					box = detection[0:4] * np.array([W, H, W, H])
+					(centerX, centerY, _, _) = box.astype("int")
+					
+					if self.LABELS[classID] == "person":
+						return (centerX, centerY)
+
+		return False
+
+
+	def _img_callback(self, data):
+		try:
+			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+		except CvBridgeError as e:
+			print(e)
+		
+		if False and self.face_found(cv_image):
+			# change state
+			self.state = fsm.FACE_DETECTED
+			print("FaceFound")
+			# cv_image = image = cv2.putText(cv_image, 'FACE DETECTED', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+		else:
+			# cv_image = image = cv2.putText(cv_image, 'NO FACE', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+			print("starting")
+			person = self.find_person(cv_image)
+			# change state
+
+			if person:
+				print(person)
+				#### Do something with these coordinates
+				personX = person[0]
+				personY = person[1]
+				self.state = fsm.PERSON_DETECTED
+			else:
+				print("no person")
+				self.state = fsm.LOST
+
+		try:
+			
+			img_out = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
+			img_out.header.frame_id = "camera_rgb_optical_frame"
+			img_out.header.seq = self._debug_image_seq_num
+			
+			# self.image_pub.publish(img_out)
+			self._debug_image_seq_num += 1
+		except CvBridgeError as e:
+			print(e)
+
+
+	# Function to retrieve the average distance of pixels from a bounding box
+	# depth_img = opencv image
+	# object_xy = (x,y)
+	# Output: float in meters
+	def get_object_distance(self, depth_img, object_xy, sample_area=5, simple=True):
+		#Checking if bounding box is inside depth img
+		if not self.is_inside(depth_img, object_xy):
+			return None # TODO: Maybe throw error
+		
+		if simple:
+			return depth_img[object_xy[1], object_xy[0]]
+		
+		else:
+			count = 0
+			for x in range(object_xy[0]-sample_area,object_xy[0]+sample_area):
+				for y in range(object_xy[1]-sample_area,object_xy[1]+sample_area):
+					count += depth_img[y,x]
+			
+			pixel_count = pow(sample_area*2,2)
+			return count / pixel_count
    
 
-    # Function to calculate percentage from the center (of image) an object is
-    # img_width: float
-    # object_xy = (x,y)
-    # Output: float. percentage from center of image: - = left. + = right
-    def get_object_percent_center(self, img_width, object_xy):
-        img_center = img_width // 2
-        dist_from_center = object_xy[0] - img_center
-        return (dist_from_center / img_center) * 100
+	# Function to calculate percentage from the center (of image) an object is
+	# img_width: float
+	# object_xy = (x,y)
+	# Output: float. percentage from center of image: - = left. + = right
+	def get_object_percent_center(self, img_width, object_xy):
+		img_center = img_width // 2
+		dist_from_center = object_xy[0] - img_center
+		return (dist_from_center / img_center) * 100
 
 
-    def publish_vision_info(self, pct_from_center, distance_to_object):
-        out_msg = String()
-        out = str(pct_from_center) + "," + str(distance_to_object) + "," + 
+	def publish_vision_info(self, pct_from_center, distance_to_object):
+		out_msg = String()
+		lost = "True" if self.state == fsm.LOST else "False"
+		face = "True" if self.state == fsm.FACE_DETECTED else "False"
+		out_msg.data = str(pct_from_center) + "," + str(distance_to_object) + "," + lost + "," + face
+
+		self.vision_pub.publish(out_msg)
 
 
 
 def main():
-    vision = Vision()
-    rospy.init_node("vision_node", anonymous=True)
+	vision = Vision()
+	rospy.init_node("vision_node", anonymous=True)
 
-    try:
-        rospy.spin()
-        # vision.main_loop()
-    except rospy.ROSInterruptException:
-        rospy.logerr("ROS node interruped")
+	try:
+		rospy.spin()
+		# vision.main_loop()
+	except rospy.ROSInterruptException:
+		rospy.logerr("ROS node interruped")
 
-    cv2.destroyAllWindows()
+	cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    main()
+	main()
