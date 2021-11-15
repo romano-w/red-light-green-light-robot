@@ -52,7 +52,7 @@ class Driver():
 
 		self._vision_sub = rospy.Subscriber("vision_node", String, self._vision_callback)
 
-    # Set up subscribers and publishers
+	# Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
 		self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
 		self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
@@ -94,20 +94,20 @@ class Driver():
 		self._dt = 1 / float(FREQUENCY)
 
 		# Wall follow PID params
-        self._predicted_e_time = 1          # The amount of time in the future to calculate predicted error
-        self._wall_p = kp               # Proportional term weight
-        self._wall_d = kd               # Derivative term weight
+		self._predicted_e_time = 1          # The amount of time in the future to calculate predicted error
+		self._wall_p = kp               # Proportional term weight
+		self._wall_d = kd               # Derivative term weight
 		self._wall_k = k                         # K offset constant term
-        self._wall_errs = []            # Error history
+		self._wall_errs = []            # Error history
 
 		self._wall_follow_distance = 0.2 # m
 
-        self.left_scan_angle = [80.0 / 180 * math.pi, 100.0 / 180 * math.pi]
-        self.right_scan_angle = [-100.0 / 180 * math.pi, -80.0 / 180 * math.pi]
-        self.front_scan_angle = [-25.0 / 180 * math.pi, 25.0 / 180 * math.pi]
-        self.theta = 20                 # The theta values between min and max scan angles (both same)
+		self.left_scan_angle = [80.0 / 180 * math.pi, 100.0 / 180 * math.pi]
+		self.right_scan_angle = [-100.0 / 180 * math.pi, -80.0 / 180 * math.pi]
+		self.front_scan_angle = [-25.0 / 180 * math.pi, 25.0 / 180 * math.pi]
+		self.theta = 20                 # The theta values between min and max scan angles (both same)
 
-        self._wall_e = 0
+		self._wall_e = 0
 
 	def _laser_callback(self, msg):
 		"""Processes laser message."""
@@ -136,7 +136,7 @@ class Driver():
 		eulers = [orient_q.x, orient_q.y, orient_q.z, orient_q.w]
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
-    def _vision_callback(self, msg):
+	def _vision_callback(self, msg):
 		data = msg.data.split(",")
 		self.target_off_center = float(data[0])
 		self.distance_from_goal = float(data[1])
@@ -147,27 +147,27 @@ class Driver():
 		elif self.fsm != fsm.AVOID:
 			self.fsm = fsm.MOVE
 
-    def _w_follow_error(self, a, b, c):
-        """Calculates the true distance from the wall.
-        a -- the forward laser reading of the fov
-        b -- the laser reading perpendicular to robot
-        c -- the rear laser reading of the fov
-        """
-        alpha = math.atan((a * math.cos(self.theta) - c) / (a * math.sin(self.theta)))
-        instant_dist = b * math.cos(alpha)
-        future_dist = instant_dist + (self._predicted_e_time * self.linear_velocity * math.sin(alpha))
-        error = self._wall_follow_distance - future_dist
-        self._wall_e = error
+	def _w_follow_error(self, a, b, c):
+		"""Calculates the true distance from the wall.
+		a -- the forward laser reading of the fov
+		b -- the laser reading perpendicular to robot
+		c -- the rear laser reading of the fov
+		"""
+		alpha = math.atan((a * math.cos(self.theta) - c) / (a * math.sin(self.theta)))
+		instant_dist = b * math.cos(alpha)
+		future_dist = instant_dist + (self._predicted_e_time * self.linear_velocity * math.sin(alpha))
+		error = self._wall_follow_distance - future_dist
+		self._wall_e = error
 
 	def _w_follow_pid_angle(self):
-        """Calculate the angle to turn for this step.
-        return -- rotation angle
-        """
-        self._wall_errs.append()
-        u = self._wall_k + self._wall_p * err
-        if len(self._wall_errs) > 2:
-            u += self._wall_d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
-        return u
+		"""Calculate the angle to turn for this step.
+		return -- rotation angle
+		"""
+		self._wall_errs.append()
+		u = self._wall_k + self._wall_p * err
+		if len(self._wall_errs) > 2:
+			u += self._wall_d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
+		return u
 
 	def update_linear(self, err):
 		self._prev_error = self._linear_error
@@ -217,7 +217,7 @@ class Driver():
 				# is back in sight of the camera
 				elif not self._close_obstacle:		# Wall follow mode
 					rot = self._w_follow_pid_angle()
-	                self.move(self.linear_velocity, rot)
+					self.move(self.linear_velocity, rot)
 			elif self.fsm == fsm.FACE:
 				self.move(0,0)
 			elif self.fsm == fsm.LOST:
@@ -239,9 +239,9 @@ def main():
 	rospy.sleep(2)
 
 	try:
-	    driver.spin()
+		driver.spin()
 	except rospy.ROSInterruptException:
-	    rospy.logerr("ROS node interruped")
+		rospy.logerr("ROS node interruped")
 
 if __name__ == "__main__":
 	main()
