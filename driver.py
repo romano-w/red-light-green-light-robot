@@ -120,8 +120,8 @@ class Driver():
 
 	def _vision_callback(self, msg):
 		data = msg.data.split(",")
-		self.target_off_center = data[0]
-		self.distance_from_goal = data[1]
+		self.target_off_center = float(data[0])
+		self.distance_from_goal = float(data[1])
 		if data[2] == "True":
 			self.fsm = fsm.FACE
 		elif data[3] == "True":
