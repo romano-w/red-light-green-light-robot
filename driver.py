@@ -25,7 +25,7 @@ FREQUENCY = 5 #Hz.
 
 # Velocities that will be used (feel free to tune)
 LINEAR_VELOCITY = .1 # m/s
-ANGULAR_VELOCITY = math.pi/6 # rad/s
+ANGULAR_VELOCITY = math.pi/12 # rad/s
 
 # Threshold distances
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
@@ -122,6 +122,7 @@ class Driver():
 		'left':   min(min(msg.ranges[501:713]), 10),
 		}
 		self._distance_from_wall = regions_['right']
+		print("_distance_from_wall:", self._distance_from_wall)
 		if not self._close_obstacle:
 			if regions_['front'] < self.min_threshold_distance:
 				self._close_obstacle = True
@@ -202,6 +203,7 @@ class Driver():
 	def spin(self):
 		rate = rospy.Rate(self.frequency)
 		while not rospy.is_shutdown():
+			# print("_close_obstacle:", self._close_obstacle)
 			if self.fsm == fsm.MOVE:
 				print("FOLLOWING")
 				linear_error = self.goal_following_distance - self.distance_from_goal
@@ -212,6 +214,7 @@ class Driver():
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
 			elif self.fsm == fsm.AVOID:
+				print("REROUTING")
 				# Turn until the obstacle is out of the way
 				if self._close_obstacle is True:
 					self.move(0, -self.angular_velocity)
