@@ -38,7 +38,7 @@ class fsm(Enum):
 	AVOID = 3
 	FACE = 4
 
-  
+
 class Driver():
 	def __init__(self, frequency=FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
@@ -97,6 +97,7 @@ class Driver():
         self._predicted_e_time = 1          # The amount of time in the future to calculate predicted error
         self._wall_p = kp               # Proportional term weight
         self._wall_d = kd               # Derivative term weight
+		self._wall_k = k                         # K offset constant term
         self._wall_errs = []            # Error history
 
 		self._wall_follow_distance = 0.2 # m
@@ -163,22 +164,22 @@ class Driver():
         return -- rotation angle
         """
         self._wall_errs.append()
-        u = self._k + self._p * err
+        u = self._wall_k + self._wall_p * err
         if len(self._wall_errs) > 2:
-            u += self._d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
+            u += self._wall_d * ((self._wall_errs[-1] - self._wall_errs[-2]) / self.frequency)
         return u
 
 	def update_linear(self, err):
 		self._prev_error = self._linear_error
 		self._linear_error = err
-		d_term =  float((self._linear_error - self._prev_error) / float(self._dt)) 
+		d_term =  float((self._linear_error - self._prev_error) / float(self._dt))
 		self._linear_control = self._linear_kp * self._linear_error + self._linear_kd * d_term
-	
+
 	def update_angular(self, err):
 		# takes in a percentage from center (will also be positive or negative)
 		self._prev_error = self._angular_error
 		self._angular_error = err
-		d_term =  float((self._angular_error - self._prev_error) / float(self._dt)) 
+		d_term =  float((self._angular_error - self._prev_error) / float(self._dt))
 		self._angular_control = self._angular_kp * self._angular_error + self._angular_kd * d_term
 
 	def stop(self):
@@ -237,10 +238,10 @@ def main():
 
 	rospy.sleep(2)
 
-	# try:
-	#     driver.spin()
-	# except rospy.ROSInterruptException:
-	#     rospy.logerr("ROS node interruped")
+	try:
+	    driver.spin()
+	except rospy.ROSInterruptException:
+	    rospy.logerr("ROS node interruped")
 
 if __name__ == "__main__":
 	main()
