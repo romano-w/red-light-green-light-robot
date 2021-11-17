@@ -43,18 +43,11 @@ class fsm(Enum):
 class Driver():
 	def __init__(self, frequency=FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
-		# TODO:
-		# Node for publishing everything:
-			# pct_from_center: float
-			# distance_to_object: float
-			# face_detected: bool -> string = "True" "False"
-			# lost: bool -> string = "True" "False"
-			# string format: pct_from_center,distance_to_object,face_detected,lost
-
-		# self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
+		self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
 
 		# Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+		self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
 		self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
 		self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
 
