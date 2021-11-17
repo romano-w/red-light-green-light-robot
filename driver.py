@@ -101,11 +101,11 @@ class Driver():
 		self._wall_k = 0                         # K offset constant term
 		self._wall_errs = []            # Error history
 
-		self._wall_follow_distance = 0.2 # m
+		self._wall_follow_distance = 0.4 # m
 
 		self.left_scan_angle = [80.0 / 180 * math.pi, 100.0 / 180 * math.pi]
 		self.right_scan_angle = [-100.0 / 180 * math.pi, -80.0 / 180 * math.pi]
-		self.front_scan_angle = [-25.0 / 180 * math.pi, 25.0 / 180 * math.pi]
+		self.front_scan_angle = [20, -20]
 		self.theta = 20                 # The theta values between min and max scan angles (both same)
 
 		self._wall_e = 0
@@ -120,37 +120,17 @@ class Driver():
 		right_b = msg.ranges[right_med_index]
 		right_c = msg.ranges[right_min_index]
 		self._w_follow_error(right_a, right_b, right_c)
-		# rospy.loginfo("wall error: " + str(self._wall_e))
+		# rospy.loginfo("wall error: " + str(self._wall_e))		# Uncomment to see error values
 
 		# Detect front obstacle
-		front_min_index = int((self.front_scan_angle[0] - msg.angle_min) / msg.angle_increment)
-		front_max_index = int((self.front_scan_angle[1] - msg.angle_min) / msg.angle_increment)
+		front_min_index = self.front_scan_angle[0]
+		front_max_index = self.front_scan_angle[1]
 
 		# Check for obstacle and rotate in correct direction to move out of the corner
 		if np.min(msg.ranges[front_min_index:front_max_index+1]) <= self._wall_follow_distance:
 			self.fsm = fsm.TURN
 		else:
 			self.fsm = fsm.AVOID
-
-
-
-		# for i in range(len(msg.ranges)/2):
-		# 	if msg.ranges[i] < distance_from_wall:
-		# 		distance_from_wall = msg.ranges[i]
-		# # self._distance_from_wall = distance_from_wall
-		# regions_ = {
-		# 'right':  min(min(msg.ranges[0:250]), 10),
-		# 'front':  min(min(msg.ranges[251:500]), 10),
-		# 'left':   min(min(msg.ranges[501:713]), 10),
-		# }
-		# self._distance_from_wall = regions_['right']
-		#
-		# print("_distance_from_wall:", self._distance_from_wall)
-		#
-		# if not self._close_obstacle:
-		# 	if regions_['front'] < self.min_threshold_distance:
-		# 		self._close_obstacle = True
-		# 		self.fsm = fsm.AVOID
 
 	def _odom_callback(self, msg):
 		"""Callback to process odom."""
@@ -162,7 +142,7 @@ class Driver():
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
 	def _vision_callback(self, msg):
-		print(msg.data)
+		# print(msg.data)
 		data = msg.data.split(",")
 		if data[0] != "None":
 			self.target_off_center = float(data[0])
@@ -228,10 +208,8 @@ class Driver():
 	def spin(self):
 		rate = rospy.Rate(self.frequency)
 		while not rospy.is_shutdown():
-			rospy.loginfo(self.fsm)
-			# print("_close_obstacle:", self._close_obstacle)
 			if self.fsm == fsm.MOVE:
-				# print("FOLLOWING")
+				rospy.loginfo("FOLLOWING")
 				linear_error = self.goal_following_distance - self.distance_from_goal
 				self.update_linear(linear_error)
 				angular_error = self.target_off_center
@@ -240,22 +218,19 @@ class Driver():
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
 			elif self.fsm == fsm.AVOID:
-				# print("REROUTING")
+				rospy.loginfo("REROUTING")
+				rot = self._w_follow_pid_angle(self._wall_e)
+				self.move(self.linear_velocity, rot)
+			elif self.fsm == fsm.TURN:
 				# Turn until the obstacle is out of the way
-				if self._close_obstacle is True:
-					self.move(0, -self.angular_velocity)
-					self._close_obstacle = False
-				# Then start traversing the obstacle
-				# We will get a signal from the vision.py once the person
-				# is back in sight of the camera
-				elif not self._close_obstacle:		# Wall follow mode
-					rot = self._w_follow_pid_angle(self._wall_e)
-					self.move(self.linear_velocity, rot)
+				rospy.loginfo("AVOIDING FRONT OBSTACLE")
+				self.move(0, -self.angular_velocity)
+				# self._close_obstacle = False
 			elif self.fsm == fsm.FACE:
-				# print("RED LIGHT")
+				rospy.loginfo("RED LIGHT")
 				self.move(0,0)
 			elif self.fsm == fsm.LOST:
-				# print("HELP I'M LOST")
+				rospy.loginfo("HELP I'M LOST")
 				self.lost_mode()
 			rate.sleep()
 
