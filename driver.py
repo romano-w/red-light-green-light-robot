@@ -122,7 +122,9 @@ class Driver():
 		'left':   min(min(msg.ranges[501:713]), 10),
 		}
 		self._distance_from_wall = regions_['right']
+
 		print("_distance_from_wall:", self._distance_from_wall)
+
 		if not self._close_obstacle:
 			if regions_['front'] < self.min_threshold_distance:
 				self._close_obstacle = True
