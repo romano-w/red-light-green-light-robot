@@ -5,8 +5,8 @@
 # Date: Fall 21, 11/15/2021
 # Sources:
 
-# import roslib
-# roslib.load_manifest('my_package')
+
+
 import numpy as np
 import sys
 import rospy
@@ -29,34 +29,22 @@ class fsm(Enum):
 class Vision():
 	def __init__(self):
 
-
+		# Publishers
 		self.image_pub = rospy.Publisher("/camera/rgb/image_debug", Image, queue_size=1)
 		self.vision_pub = rospy.Publisher("/vision_info", String, queue_size=1)
-		self.bridge = CvBridge()
+
+		#Subscribers
 		self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self._img_callback, queue_size=1)
 		self.depth_image_sub = rospy.Subscriber("/camera/depth/image", Image, self._depth_img_callback, queue_size=1)
 
-		#dir_name = "./vizfiles"
-		dir_name = "/home/husarion/husarion_ws/src/red-light-green-light-robot/vizfiles"
-		print(cv2.__version__)
-
-		self.state = fsm.LOST   # robot is initially lost
-		self.face_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_frontalface_alt2.xml')    # load face cascade
-		self.body_cascade = cv2.CascadeClassifier(dir_name + '/haarcascade_upperbody.xml')
+		#FSM
+		self.state = fsm.LOST   
 		
-		# code for loading yolo
-		labelsPath = dir_name + "/coco.names"
-		weightsPath = dir_name + "/yolov3-tiny.weights"
-		configPath = dir_name + "/yolov3.cfg"
-		self.LABELS = open(labelsPath).read().strip().split("\n")
-		self.net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
-		
-		self.layer_names = self.net.getLayerNames()
-		self.layer_names = [self.layer_names[i - 1] for i in self.net.getUnconnectedOutLayers()]
-
+		# Image Processing
+		self.bridge = CvBridge()
 		self._debug_image_seq_num = 0
-
 		self.depth_image = None
+		print(cv2.__version__)
 
 
 	def scale_img(self,img,scale_factor):
@@ -67,52 +55,31 @@ class Vision():
 			# resize image
 			return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
-	
 
-	def face_found(self, img):
-		# Detect faces
-		faces = self.face_cascade.detectMultiScale(img, 1.1, 4)
+	def detect_color_object(self,img, detect_color):
+		if detect_color.lower() == "red":
+			lower_thresh = (173, 132, 0)
+			upper_thresh = (179, 255, 255)
+		elif detect_color.lower() == "green":
+			lower_thresh = (173, 132, 0)
+			upper_thresh = (179, 255, 255)
 
-		# do we have faces
-		return len(faces) > 0
+		#Blur and convert to HSV
+		blurred = cv2.GaussianBlur(img, (10,10), 0)
+		hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+		#Apply Mask
+		mask = cv2.inRange(hsv, lower_thresh, upper_thresh)
 
-	# function implemented with help from https://www.pyimagesearch.com/2018/11/12/yolo-object-detection-with-opencv/
-	def find_person(self, img):
+		contours,_ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		center = None
 
-		(H, W) = img.shape[:2]
-
-
-		blob = cv2.dnn.blobFromImage(img, 1 / 255.0, (416, 416), swapRB=True, crop=False)
-		self.net.setInput(blob)
-		layerOutputs = self.net.forward(self.layer_names)
-
-
-		for output in layerOutputs:
-			# loop over each of the detections
-			for detection in output:
-				# extract the class ID and confidence (i.e., probability) of
-				# the current object detection
-				scores = detection[5:]
-				classID = np.argmax(scores)
-				confidence = scores[classID]
-				# filter out weak predictions
-				if confidence > 0.5:
-					# scale box by image size and get center
-					box = detection[0:4] * np.array([W, H, W, H])
-					(centerX, centerY, _, _) = box.astype("int")
-					
-					if self.LABELS[classID] == "person":
-						return (centerX, centerY)
-
-		return False
-
-	def find_person_haar_cascade(self,img):
-		bodies = self.body_cascade.detectMultiScale(img, 1.1, 4)
-		if len(bodies) > 0:
-			body = bodies[0]
-			return body[0] + (body[2] // 2), body[1] + (body[3] // 2)
+		if len(contours) > 0:
+			c = max(contours, key=cv2.contourArea)
+			M = cv2.moments(c)
+			return (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 		else:
-			return False
+			return None
+
 
 
 	def _depth_img_callback(self, data):
@@ -122,47 +89,37 @@ class Vision():
 		try:
 			cv_image_original = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
-			gray = cv2.cvtColor(cv_image_original, cv2.COLOR_BGR2GRAY)
-			cv_image_face = self.scale_img(gray, SCALE_FACE_CONST)
-			cv_image_body = self.scale_img(gray, SCALE_BODY_CONST)
+			cv_image_scaled = self.scale_img(cv_image_original, SCALE_FACE_CONST)
 
 		except CvBridgeError as e:
 			print(e)
 		
-		if self.face_found(cv_image_face):
+		if self.detect_color_object(cv_image_scaled, "red") is not None:
 			# change state
 			self.state = fsm.FACE_DETECTED
 			self.publish_vision_info(None, None)
-			print("FaceFound")
 
 		else:
-			# person = self.find_person(cv_image)
-			person = self.find_person_haar_cascade(cv_image_body)
-			# person = None
-			# change state
-			if person:
-				#### Do something with these coordinates
+			green = self.detect_color_object(cv_image_scaled, "green")
+
+			# Follow Mode
+			if green:
 				self.state = fsm.PERSON_DETECTED
-				distance = self.get_object_distance(self.depth_image, person)
-				pct_from_center = self.get_object_percent_center(cv_image_body.shape[1], person)
-				print("person_x_y: ", person[0], person[1], "distance: ", distance, "pct from center: ", pct_from_center)
+				distance = self.get_object_distance(self.depth_image, green)
+				pct_from_center = self.get_object_percent_center(cv_image_scaled.shape[1], green)
 				
+				print("person_x_y: ", green[0], green[1], "distance: ", distance, "pct from center: ", pct_from_center)
+
 				self.publish_vision_info(pct_from_center, distance)
 
+			# Lost Mode
 			else:
-				print("no person")
 				self.publish_vision_info(None, None)
 				self.state = fsm.LOST
 
-		try:
-			img_out = self.bridge.cv2_to_imgmsg(cv_image_original, "bgr8")
-			img_out.header.frame_id = "camera_rgb_optical_frame"
-			img_out.header.seq = self._debug_image_seq_num
-			self.image_pub.publish(img_out)
-			self._debug_image_seq_num += 1
-		except CvBridgeError as e:
-			print(e)
 
+		# Publish Debug Image
+		self.publish_debug_image(cv_image_original)
 
 	# Function to retrieve the average distance of pixels from a bounding box
 	# depth_img = opencv image
@@ -205,6 +162,17 @@ class Vision():
 		out_msg.data = pct + "," + dst + "," + face + "," + lost
 
 		self.vision_pub.publish(out_msg)
+
+	def publish_debug_image(self, img):
+		try:
+			img_out = self.bridge.cv2_to_imgmsg(img, "bgr8")
+			img_out.header.frame_id = "camera_rgb_optical_frame"
+			img_out.header.seq = self._debug_image_seq_num
+			self.image_pub.publish(img_out)
+			self._debug_image_seq_num += 1
+		except CvBridgeError as e:
+			print(e)
+
 
 	def main_loop(self):
 		rate = rospy.Rate(60)
