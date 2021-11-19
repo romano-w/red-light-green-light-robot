@@ -24,7 +24,7 @@ DEFAULT_SCAN_TOPIC = 'scan'
 FREQUENCY = 5 #Hz.
 
 # Velocities that will be used (feel free to tune)
-LINEAR_VELOCITY = .1 # m/s
+LINEAR_VELOCITY = .2 # m/s
 ANGULAR_VELOCITY = math.pi/12 # rad/s
 
 # Threshold distances
@@ -193,8 +193,11 @@ class Driver():
 		"""Send a velocity command (linear vel in m/s, angular vel in rad/s)."""
 		# Setting velocities.
 		twist_msg = Twist()
-
+		if linear_vel > self.linear_velocity: # Avoids moving too fast
+			linear_vel = self.linear_velocity
 		twist_msg.linear.x = linear_vel
+		if linear_vel > self.angular_velocity: # Avoids spinning too fast
+			linear_vel = self.angular_velocity
 		twist_msg.angular.z = angular_vel
 		self._cmd_pub.publish(twist_msg)
 
