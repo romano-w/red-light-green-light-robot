@@ -11,6 +11,7 @@ import numpy as np
 import sys
 import rospy
 import cv2
+from collections import deque
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
@@ -18,13 +19,16 @@ from enum import Enum
 import os
 import time
 
-SCALE_FACE_CONST = 30
-SCALE_BODY_CONST = 30
+WINDOW_SIZE = 30
+HIST_THRESHOLD = 0.4
+SCALE_CONST = 50
+
+
 
 class fsm(Enum):
 	LOST = 0
-	PERSON_DETECTED = 1
-	FACE_DETECTED = 2
+	GREEN_DETECTED = 1
+	RED_DETECTED = 2
 
 
 class Vision():
@@ -45,12 +49,17 @@ class Vision():
 		self.bridge = CvBridge()
 		self._debug_image_seq_num = 0
 		self.depth_image = None
-		print(cv2.__version__)
+		self.green_history = deque([],maxlen=WINDOW_SIZE)
+		self.red_history = deque([],maxlen=WINDOW_SIZE)
 
+
+		print(cv2.__version__)
 
 		#Misc
 		self.prev_time = time.time()
 		self.f_count = 0
+
+
 
 	#A function that scales an image from a scale factor
 	# img: opencv image
@@ -67,14 +76,13 @@ class Vision():
 	# Function that detects if a set of contours is a rectangle or not
 	# c: opencv countour
 	# Output: bool
-	def is_rectangle(self,c):
+	def is_rectangle(self,c, rectangle_confidence):
 		peri = cv2.arcLength(c, True)
-		approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+		approx = cv2.approxPolyDP(c, rectangle_confidence * peri, True)
 		# Retangle Detection
 		if len(approx) == 4:
 			(x, y, w, h) = cv2.boundingRect(approx)
 			area = w * float(h)
-			print(area)
 			return True
 		else:
 			return False
@@ -83,16 +91,16 @@ class Vision():
 	#A function that detects if an image has a colored rectangle in it. Supports green and red rectangles
 	# img: opencv image
 	# detect_color: string: "red" or "green"
-	def detect_color_rectangle(self,img, detect_color):
+	def detect_color_rectangle(self,img, detect_color, rectangle_confidence=0.04):
 
 		#Blur and convert to HSV
 		blurred = cv2.GaussianBlur(img, (11,11), 0)
 		hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
 		if detect_color.lower() == "red":
-			mask = cv2.inRange(hsv, (145, 56, 113), (179, 255, 255)) + cv2.inRange(hsv, (0, 136, 0), (7, 255, 128)) 
+			mask = cv2.inRange(hsv, (0, 115, 124), (12, 255, 255)) #SUDI
 		elif detect_color.lower() == "green":
-			mask = cv2.inRange(hsv, (38, 0, 0), (111, 255, 255))
+			mask = cv2.inRange(hsv, (49, 38, 0), (102, 255, 117))
 
 		#Apply Mask
 		mask = cv2.erode(mask, None, iterations=2)
@@ -103,7 +111,7 @@ class Vision():
 		if len(contours) > 0:
 			c = max(contours, key=cv2.contourArea)
 			
-			if not self.is_rectangle(c):
+			if not self.is_rectangle(c, rectangle_confidence):
 				return None
 
 			M = cv2.moments(c)
@@ -113,7 +121,7 @@ class Vision():
 
 
 	def _depth_img_callback(self, data):
-		self.depth_image = self.scale_img(self.bridge.imgmsg_to_cv2(data, "passthrough"), SCALE_BODY_CONST)
+		self.depth_image = self.scale_img(self.bridge.imgmsg_to_cv2(data, "passthrough"), SCALE_CONST)
 
 	def _img_callback(self, data):
 		self.calc_fps()
@@ -121,24 +129,31 @@ class Vision():
 		# Getting and converting image
 		try:
 			cv_image_original = self.bridge.imgmsg_to_cv2(data, "bgr8")
-			cv_image_scaled = self.scale_img(cv_image_original, SCALE_FACE_CONST)
+			cv_image_scaled = self.scale_img(cv_image_original, SCALE_CONST)
+			
+			#For Calibration
+			# cv2.imwrite("./red_test.png", cv_image_original)
+			# print("Written")
 
 		except CvBridgeError as e:
 			print(e)
 		
 		# Looking for colored rectangles
-		if self.detect_color_rectangle(cv_image_scaled, "red") is not None:
+		if self.detect_color_rectangle(cv_image_scaled, "red", 0.035) is not None:
+			self.red_history.append(1)
+			
 			# change state
-			self.state = fsm.FACE_DETECTED
+			self.state = fsm.RED_DETECTED
 			self.publish_vision_info(None, None)
 			print("red")
 		else:
-			green = self.detect_color_rectangle(cv_image_scaled, "green")
+			self.red_history.append(0)
+			green = self.detect_color_rectangle(cv_image_scaled, "green",0.05)
 
 			# Follow Mode
 			if green:
-				print("green")
-				self.state = fsm.PERSON_DETECTED
+				self.green_history.append(1)
+				self.state = fsm.GREEN_DETECTED
 				distance = self.get_object_distance(self.depth_image, green)
 				pct_from_center = self.get_object_percent_center(cv_image_scaled.shape[1], green)
 				
@@ -148,11 +163,12 @@ class Vision():
 
 			# Lost Mode
 			else:
+				self.green_history.append(0)
 				self.publish_vision_info(None, None)
 				self.state = fsm.LOST
 
 		# Publish Debug Image
-		self.publish_debug_image(cv_image_original)
+		self.publish_debug_image(cv_image_scaled)
 
 
 
@@ -187,16 +203,19 @@ class Vision():
 		dist_from_center = object_xy[0] - img_center
 		return (float(dist_from_center) / float(img_center)) * 100
 
+	def is_valid_history(self,history):
+		return
 
 	def publish_vision_info(self, pct_from_center, distance_to_object):
 		out_msg = String()
 		lost = "True" if self.state == fsm.LOST else "False"
-		face = "True" if self.state == fsm.FACE_DETECTED else "False"
+		face = "True" if self.state == fsm.GREEN_DETECTED else "False"
 		pct = "None" if pct_from_center == None else str(pct_from_center)
 		dst =  "None" if distance_to_object == None else str(distance_to_object)
 		out_msg.data = pct + "," + dst + "," + face + "," + lost
 
 		self.vision_pub.publish(out_msg)
+
 
 	def publish_debug_image(self, img):
 		try:
