@@ -16,6 +16,7 @@ from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
 from enum import Enum
 import os
+import time
 
 SCALE_FACE_CONST = 30
 SCALE_BODY_CONST = 30
@@ -47,6 +48,14 @@ class Vision():
 		print(cv2.__version__)
 
 
+		#Misc
+		self.prev_time = time.time()
+		self.f_count = 0
+
+	#A function that scales an image from a scale factor
+	# img: opencv image
+	# scale_factor: int: percentage to scale. eg. 50 scale to 50% of original
+	# output: opencv image
 	def scale_img(self,img,scale_factor):
 			width = int(img.shape[1] * scale_factor / 100)
 			height = int(img.shape[0] * scale_factor / 100)
@@ -55,55 +64,80 @@ class Vision():
 			# resize image
 			return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
+	# Function that detects if a set of contours is a rectangle or not
+	# c: opencv countour
+	# Output: bool
+	def is_rectangle(self,c):
+		peri = cv2.arcLength(c, True)
+		approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+		# Retangle Detection
+		if len(approx) == 4:
+			(x, y, w, h) = cv2.boundingRect(approx)
+			area = w * float(h)
+			print(area)
+			return True
+		else:
+			return False
+	
 
-	def detect_color_object(self,img, detect_color):
-		if detect_color.lower() == "red":
-			lower_thresh = (173, 132, 0)
-			upper_thresh = (179, 255, 255)
-		elif detect_color.lower() == "green":
-			lower_thresh = (173, 132, 0)
-			upper_thresh = (179, 255, 255)
+	#A function that detects if an image has a colored rectangle in it. Supports green and red rectangles
+	# img: opencv image
+	# detect_color: string: "red" or "green"
+	def detect_color_rectangle(self,img, detect_color):
 
 		#Blur and convert to HSV
-		blurred = cv2.GaussianBlur(img, (10,10), 0)
+		blurred = cv2.GaussianBlur(img, (11,11), 0)
 		hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-		#Apply Mask
-		mask = cv2.inRange(hsv, lower_thresh, upper_thresh)
 
-		contours,_ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		center = None
+		if detect_color.lower() == "red":
+			mask = cv2.inRange(hsv, (145, 56, 113), (179, 255, 255)) + cv2.inRange(hsv, (0, 136, 0), (7, 255, 128)) 
+		elif detect_color.lower() == "green":
+			mask = cv2.inRange(hsv, (38, 0, 0), (111, 255, 255))
+
+		#Apply Mask
+		mask = cv2.erode(mask, None, iterations=2)
+		mask = cv2.dilate(mask, None, iterations=2)
+
+		_,contours,_ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 		if len(contours) > 0:
 			c = max(contours, key=cv2.contourArea)
+			
+			if not self.is_rectangle(c):
+				return None
+
 			M = cv2.moments(c)
 			return (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-		else:
-			return None
 
+		return None
 
 
 	def _depth_img_callback(self, data):
 		self.depth_image = self.scale_img(self.bridge.imgmsg_to_cv2(data, "passthrough"), SCALE_BODY_CONST)
 
 	def _img_callback(self, data):
+		self.calc_fps()
+
+		# Getting and converting image
 		try:
 			cv_image_original = self.bridge.imgmsg_to_cv2(data, "bgr8")
-
 			cv_image_scaled = self.scale_img(cv_image_original, SCALE_FACE_CONST)
 
 		except CvBridgeError as e:
 			print(e)
 		
-		if self.detect_color_object(cv_image_scaled, "red") is not None:
+		# Looking for colored rectangles
+		if self.detect_color_rectangle(cv_image_scaled, "red") is not None:
 			# change state
 			self.state = fsm.FACE_DETECTED
 			self.publish_vision_info(None, None)
-
+			print("red")
 		else:
-			green = self.detect_color_object(cv_image_scaled, "green")
+			green = self.detect_color_rectangle(cv_image_scaled, "green")
 
 			# Follow Mode
 			if green:
+				print("green")
 				self.state = fsm.PERSON_DETECTED
 				distance = self.get_object_distance(self.depth_image, green)
 				pct_from_center = self.get_object_percent_center(cv_image_scaled.shape[1], green)
@@ -117,9 +151,10 @@ class Vision():
 				self.publish_vision_info(None, None)
 				self.state = fsm.LOST
 
-
 		# Publish Debug Image
 		self.publish_debug_image(cv_image_original)
+
+
 
 	# Function to retrieve the average distance of pixels from a bounding box
 	# depth_img = opencv image
@@ -179,6 +214,12 @@ class Vision():
 		while not rospy.is_shutdown():
 			# self.publish_vision_info(None, None)
 			rate.sleep()
+
+	def calc_fps(self):
+		self.f_count += 1
+		if self.f_count % 50 == 0:
+			print("fps= " + str(100 / (time.time()-self.prev_time) ))
+			self.prev_time = time.time()
 
 
 def main():
