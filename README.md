@@ -15,3 +15,4 @@ The primary problem addressed by our project is robotic follower behavior i.e. m
 4. Open up 2 terminals 
 5. In the first, run the `vision.py` file
 6. In the second, run the `driver.py` file
+7. Next, use the red/green tags to make the robot stop/follow
