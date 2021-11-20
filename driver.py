@@ -24,12 +24,12 @@ DEFAULT_SCAN_TOPIC = 'scan'
 FREQUENCY = 5 #Hz.
 
 # Velocities that will be used (feel free to tune)
-LINEAR_VELOCITY = .1 # m/s
+LINEAR_VELOCITY = 0.25 # m/s
 ANGULAR_VELOCITY = math.pi/12 # rad/s
 
 # Threshold distances
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
-GOAL_FOLLOWING_DISTANCE = 0.5 # m, distance to maintain from target
+GOAL_FOLLOWING_DISTANCE = 1 # m, distance to maintain from target
 
 
 class fsm(Enum):
@@ -70,13 +70,13 @@ class Driver():
 		self.face_detected = False # Flag for if the robot should stop for face
 
 		# PD gain values
-		self._linear_kp = .1
-		self._linear_kd = 100
+		self._linear_kp = -1
+		self._linear_kd = 0
 		self._linear_control = 0.0 # current control message for linear velocity
 		self._linear_error = 0.0 # current linear error
 
-		self._angular_kp = .01
-		self._angular_kd = 100
+		self._angular_kp = -1
+		self._angular_kd = 0
 		self._angular_control = 0.0 # current control message for angular velocity
 		self._angular_error = 0.0 # current angular error
 		self._prev_error = 0.0 # previous error
@@ -139,8 +139,12 @@ class Driver():
 		data = msg.data.split(",")
 		if data[0] != "None":
 			self.target_off_center = float(data[0])
+			angular_error = self.target_off_center
+			self.update_angular(angular_error)
 		if data[1] != "None":
 			self.distance_from_goal = float(data[1])
+			linear_error = self.goal_following_distance - self.distance_from_goal
+			self.update_linear(linear_error)
 			self.fsm = fsm.MOVE
 		if data[2] == "True":
 			self.fsm = fsm.FACE
@@ -193,18 +197,21 @@ class Driver():
 		"""Send a velocity command (linear vel in m/s, angular vel in rad/s)."""
 		# Setting velocities.
 		twist_msg = Twist()
-		if linear_vel > self.linear_velocity: # Avoids moving too fast
+		if math.isnan(linear_vel):
+			linear_vel = 0
+		elif linear_vel > self.linear_velocity: # Avoids moving too fast
 			linear_vel = self.linear_velocity
 		elif linear_vel < -self.linear_velocity: # Avoids moving too fast
 			linear_vel = -self.linear_velocity
 		
-		linear_vel = 0.1 if linear_vel > 0 else -0.1
 		twist_msg.linear.x = linear_vel
 		if angular_vel > self.angular_velocity: # Avoids spinning too fast
 			angular_vel = self.angular_velocity
 		elif angular_vel < -self.angular_velocity: # Avoids spinning too fast
 			angular_vel = -self.angular_velocity
 		twist_msg.angular.z = angular_vel
+
+		# print("linear_vel", linear_vel, "angular_vel" ,angular_vel)
 		self._cmd_pub.publish(twist_msg)
 
 	def spin(self):
@@ -212,10 +219,6 @@ class Driver():
 		while not rospy.is_shutdown():
 			if self.fsm == fsm.MOVE:
 				rospy.loginfo("FOLLOWING")
-				linear_error = self.goal_following_distance - self.distance_from_goal
-				self.update_linear(linear_error)
-				angular_error = self.target_off_center
-				self.update_angular(angular_error)
 				linear_vel = self._linear_control
 				angular_vel = self._angular_control
 				self.move(linear_vel, angular_vel)
