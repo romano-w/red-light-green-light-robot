@@ -11,7 +11,7 @@ The primary problem addressed by our project is robotic follower behavior i.e. m
 ## How to Run the Code
 1. Turn on the Husarion RosBot 2.0, and SSH into it
 2. Follow the instructions to launch the core and then launch the sensors
-3. Run the `calibrate.py` file to calibrate the sensor to your tag color
+3. Calibrate the the colors for the cards you have. With lower and upper values for red and green in HSV format.
 4. Open up 2 terminals 
 5. In the first, run the `vision.py` file
 6. In the second, run the `driver.py` file
