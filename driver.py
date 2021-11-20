@@ -24,12 +24,12 @@ DEFAULT_SCAN_TOPIC = 'scan'
 FREQUENCY = 5 #Hz.
 
 # Velocities that will be used (feel free to tune)
-LINEAR_VELOCITY = .2 # m/s
+LINEAR_VELOCITY = .1 # m/s
 ANGULAR_VELOCITY = math.pi/12 # rad/s
 
 # Threshold distances
 MIN_THRESHOLD_DISTANCE = 0.5 # m, threshold distance, minimum clearance distance for obstacles
-GOAL_FOLLOWING_DISTANCE = 2.0 # m, distance to maintain from target
+GOAL_FOLLOWING_DISTANCE = 0.5 # m, distance to maintain from target
 
 
 class fsm(Enum):
@@ -43,7 +43,7 @@ class fsm(Enum):
 class Driver():
 	def __init__(self, frequency=FREQUENCY, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY, min_threshold_distance=MIN_THRESHOLD_DISTANCE, goal_following_distance=GOAL_FOLLOWING_DISTANCE):
 
-		self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
+		# self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
 
 		# Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -119,11 +119,11 @@ class Driver():
 		front_min_index = self.front_scan_angle[0]
 		front_max_index = self.front_scan_angle[1]
 
-		# Check for obstacle and rotate in correct direction to move out of the corner
-		if np.min(msg.ranges[front_min_index:front_max_index+1]) <= self._wall_follow_distance:
-			self.fsm = fsm.TURN
-		else:
-			self.fsm = fsm.AVOID
+		# # Check for obstacle and rotate in correct direction to move out of the corner
+		# if np.min(msg.ranges[front_min_index:front_max_index+1]) <= self._wall_follow_distance:
+		# 	self.fsm = fsm.TURN
+		# else:
+		# 	self.fsm = fsm.AVOID
 
 	def _odom_callback(self, msg):
 		"""Callback to process odom."""
@@ -135,18 +135,17 @@ class Driver():
 		self.odom[2] = euler_from_quaternion(eulers)[2]
 
 	def _vision_callback(self, msg):
-		# print(msg.data)
 		data = msg.data.split(",")
 		if data[0] != "None":
 			self.target_off_center = float(data[0])
 		if data[1] != "None":
 			self.distance_from_goal = float(data[1])
+			self.fsm = fsm.MOVE
 		if data[2] == "True":
 			self.fsm = fsm.FACE
 		elif data[3] == "True":
 			self.fsm = fsm.LOST
-		elif self.fsm != fsm.AVOID:
-			self.fsm = fsm.MOVE
+		
 
 	def _w_follow_error(self, a, b, c):
 		"""Calculates the true distance from the wall.
@@ -195,9 +194,15 @@ class Driver():
 		twist_msg = Twist()
 		if linear_vel > self.linear_velocity: # Avoids moving too fast
 			linear_vel = self.linear_velocity
+		elif linear_vel < -self.linear_velocity: # Avoids moving too fast
+			linear_vel = -self.linear_velocity
+		
+		linear_vel = 0.1 if linear_vel > 0 else -0.1
 		twist_msg.linear.x = linear_vel
-		if linear_vel > self.angular_velocity: # Avoids spinning too fast
-			linear_vel = self.angular_velocity
+		if angular_vel > self.angular_velocity: # Avoids spinning too fast
+			angular_vel = self.angular_velocity
+		elif angular_vel < -self.angular_velocity: # Avoids spinning too fast
+			angular_vel = -self.angular_velocity
 		twist_msg.angular.z = angular_vel
 		self._cmd_pub.publish(twist_msg)
 

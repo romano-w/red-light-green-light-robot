@@ -140,19 +140,18 @@ class Vision():
 		
 		# Looking for colored rectangles
 		if self.detect_color_rectangle(cv_image_scaled, "red", 0.035) is not None:
-			self.red_history.append(1)
-			
+
 			# change state
 			self.state = fsm.RED_DETECTED
 			self.publish_vision_info(None, None)
 			print("red")
 		else:
-			self.red_history.append(0)
+
 			green = self.detect_color_rectangle(cv_image_scaled, "green",0.05)
 
 			# Follow Mode
 			if green:
-				self.green_history.append(1)
+
 				self.state = fsm.GREEN_DETECTED
 				distance = self.get_object_distance(self.depth_image, green)
 				pct_from_center = self.get_object_percent_center(cv_image_scaled.shape[1], green)
@@ -163,7 +162,6 @@ class Vision():
 
 			# Lost Mode
 			else:
-				self.green_history.append(0)
 				self.publish_vision_info(None, None)
 				self.state = fsm.LOST
 
@@ -209,10 +207,12 @@ class Vision():
 	def publish_vision_info(self, pct_from_center, distance_to_object):
 		out_msg = String()
 		lost = "True" if self.state == fsm.LOST else "False"
-		face = "True" if self.state == fsm.GREEN_DETECTED else "False"
+		red = "True" if self.state == fsm.RED_DETECTED else "False"
+		
 		pct = "None" if pct_from_center == None else str(pct_from_center)
 		dst =  "None" if distance_to_object == None else str(distance_to_object)
-		out_msg.data = pct + "," + dst + "," + face + "," + lost
+
+		out_msg.data = pct + "," + dst + "," + red + "," + lost
 
 		self.vision_pub.publish(out_msg)
 
