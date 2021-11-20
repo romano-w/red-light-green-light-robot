@@ -47,9 +47,10 @@ class Driver():
 
 		# Set up subscribers and publishers
 		self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-		self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
 		self._odom_sub = rospy.Subscriber("odom", Odometry, self._odom_callback)
 		self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
+		self._vision_sub = rospy.Subscriber("vision_info", String, self._vision_callback)
+
 
 		# Parameters.
 		self.linear_velocity = linear_velocity
@@ -119,11 +120,11 @@ class Driver():
 		front_min_index = self.front_scan_angle[0]
 		front_max_index = self.front_scan_angle[1]
 
-		# # Check for obstacle and rotate in correct direction to move out of the corner
-		# if np.min(msg.ranges[front_min_index:front_max_index+1]) <= self._wall_follow_distance:
-		# 	self.fsm = fsm.TURN
-		# else:
-		# 	self.fsm = fsm.AVOID
+		# Check for obstacle and rotate in correct direction to move out of the corner
+		if np.min(msg.ranges[front_min_index:front_max_index+1]) <= self._wall_follow_distance:
+			self.fsm = fsm.TURN
+		elif (self.fsm != fsm.MOVE) and (self.fsm != fsm.FACE) and (self.fsm != fsm.LOST):
+			self.fsm = fsm.AVOID
 
 	def _odom_callback(self, msg):
 		"""Callback to process odom."""
